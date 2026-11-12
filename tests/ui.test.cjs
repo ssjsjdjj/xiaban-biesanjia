@@ -17,7 +17,7 @@ function makeHarness(storage={},options={}){
  class EngineStub{
   constructor(cb){engine=this;this.cb=cb;this.resets=[];this.reset('normal');this.status='ready'}
   reset(mode='normal',dateSeed,opts={}){this.mode=mode;this.dateSeed=dateSeed||clockDay;this.variant=opts.variant??0;this.elapsed=0;this.duration=mode==='tutorial'?0:60;this.status='playing';this.paused=false;this.overrides={};this.resets.push({mode,dateSeed:this.dateSeed,variant:this.variant,opts:{...opts}});return this.snapshot()}
-  snapshot(){const route={name:this.mode==='daily'?'测试同题'+this.dateSeed:'测试路线'+this.variant,tagline:'metadata '+this.mode+' '+(this.mode==='daily'?this.dateSeed:this.variant),variant:this.variant,next:this.mode==='normal'?{name:'测试路线'+((this.variant+1)%3),tagline:'metadata normal '+((this.variant+1)%3),variant:(this.variant+1)%3}:null};const job={minimumMet:false,required:4,total:6,sent:0,remainingDeliveries:6,airborneUnsigned:0,retryCount:0,phase:'delivery',detail:'等待模拟投递'};return {route,job,status:this.status,mode:this.mode,elapsed:this.elapsed,duration:this.duration,dateSeed:this.dateSeed,truck:{x:210,y:586,vx:0},cargo:[],lives:3,requiredCatches:4,score:0,catches:0,saves:0,perfectCatches:0,streak:0,assists:0,retries:0,tail:{active:false,completed:false,step:1,variant:this.variant,bonus:0},tutorial:this.mode==='tutorial'?{step:1}:null,...this.overrides}}
+  snapshot(){const route={name:this.mode==='daily'?'测试同题'+this.dateSeed:'测试路线'+this.variant,tagline:'metadata '+this.mode+' '+(this.mode==='daily'?this.dateSeed:this.variant),variant:this.variant,options:[0,1,2].map(variant=>({variant,name:'测试路线'+variant,tagline:'metadata normal '+variant})),next:this.mode==='normal'?{name:'测试路线'+((this.variant+1)%3),tagline:'metadata normal '+((this.variant+1)%3),variant:(this.variant+1)%3}:null};const job={minimumMet:false,required:4,total:6,sent:0,remainingDeliveries:6,airborneUnsigned:0,retryCount:0,unthrownCount:0,retryExpiredCount:0,unavailableItems:[],cutoffSeconds:39,phase:'delivery',detail:'等待模拟投递'};return {route,job,catchDetails:[],status:this.status,mode:this.mode,elapsed:this.elapsed,duration:this.duration,dateSeed:this.dateSeed,truck:{x:210,y:586,vx:0},cargo:[],lives:3,requiredCatches:4,score:0,catches:0,saves:0,perfectCatches:0,streak:0,assists:0,retries:0,tail:{active:false,completed:false,step:1,variant:this.variant,bonus:0},tutorial:this.mode==='tutorial'?{step:1}:null,...this.overrides}}
   pause(v){this.paused=v}releaseControl(){this.releases=(this.releases||0)+1}step(dt){if(!this.paused)this.elapsed+=dt}setTarget(x){this.target=x}triggerChaos(){return !this.paused}
  }
  const document={body:element('body'),hidden:false,getElementById:id=>{if(!all[id])throw Error('Missing HTML ID '+id);return all[id]},querySelector:s=>element(s),querySelectorAll:s=>s==='[data-mode]'?modes:s==='#tailDots i'?dots:[],addEventListener:(k,f)=>events[k]=f};
@@ -36,7 +36,7 @@ const same=(a,b)=>a.mode===b.mode&&a.variant===b.variant&&(a.mode!=='daily'||a.d
 const retryCases=[['quickRestart',x=>x.click('quickRestart'),false],['hudRestart',x=>x.click('hudRestart'),false],['menu retry',x=>{x.click('pauseBtn');x.click('pauseRestartBtn')},false],['R',x=>x.key('r'),false],['result retry',x=>x.click('restartBtn'),true],['Space at result',x=>x.key(' '),true]];
 for(const mode of ['normal','daily'])for(const [name,action,needsResult]of retryCases)test(mode+' preserves '+(mode==='daily'?'mode/variant/date':'mode/variant')+' via '+name,()=>{const x=makeHarness({'xiaban-tutorial-v3':'done'});x.click(mode==='normal'?'menuNormal':'menuDaily');const before=x.latest();if(needsResult)x.end();x.setDay('2026-10-31');action(x);assert(same(before,x.latest()),JSON.stringify({before,after:x.latest()}))});
 for(const [name,action,needsResult]of retryCases.filter(x=>!x[2]))test('tutorial preserves mode via '+name,()=>{const x=makeHarness();x.click('menuTutorial');const before=x.latest();action(x);assert(same(before,x.latest()),JSON.stringify({before,after:x.latest()}))});
-test('only resultNewRoute changes normal variant',()=>{const x=makeHarness({'xiaban-tutorial-v3':'done'});x.click('menuNormal');const a=x.latest();x.end();x.click('resultNewRoute');assert(x.latest().mode==='normal'&&x.latest().variant!==a.variant,'route did not change');const b=x.latest();x.end();x.click('restartBtn');assert(same(b,x.latest()),'retry changed new route')});
+test('the ordinary explicit route switch changes variant while retry stays on that new route',()=>{const x=makeHarness({'xiaban-tutorial-v3':'done'});x.click('menuNormal');const a=x.latest();x.end();x.click('resultNewRoute');assert(x.latest().mode==='normal'&&x.latest().variant!==a.variant,'route did not change');const b=x.latest();x.end();x.click('restartBtn');assert(same(b,x.latest()),'retry changed new route')});
 test('normal record keys are separated by variant',()=>{const x=makeHarness({'xiaban-tutorial-v3':'done'});x.click('menuNormal');const a=x.review.recordKey();x.end({score:301});x.click('resultNewRoute');const b=x.review.recordKey();assert(a!==b,'shared key '+a);x.end({score:205});const records=[...x.data].filter(([k,v])=>k.includes('best')).map(([k,v])=>[k,JSON.parse(v)]);assert(records.some(([,v])=>v[a]?.score===301&&v[b]?.score===205),'not saved in separate keys: '+JSON.stringify(records))});
 test('daily record keys are separated by date',()=>{const a=makeHarness({'xiaban-tutorial-v3':'done'}),b=makeHarness({'xiaban-tutorial-v3':'done'});a.click('menuDaily');b.setDay('2026-10-31');b.click('menuDaily');assert(a.review.recordKey()!==b.review.recordKey(),'same daily key');assert(a.review.recordKey().includes('2026-10-30')&&b.review.recordKey().includes('2026-10-31'),'key lacks actual date')});
 test('five-catch slide failure goal does not ask for four catches',()=>{const x=makeHarness({'xiaban-tutorial-v3':'done'});x.click('menuNormal');x.end();const text=x.all.nextRunHint.textContent;assert(!/接齐\s*4|签收\s*4|还差.*件/.test(text),'misleading goal: '+text);assert(/滑|救|稳|落|松|慢|侧/.test(text),'goal lacks stability advice: '+text)});
@@ -1190,4 +1190,325 @@ for(const [label,unthrownCount,retryExpiredCount,positive,negative]of [['origina
 test('recovery copy preserves the engine distinction between never-thrown originals and expired real retries',()=>{
   const x=normalHarness();x.force({catches:5,recovery:{restoredCount:5,unthrownCount:1,retryExpiredCount:0,text:'5件已签收货已归位；1件原单未投出'},guidance:{kind:'recovery',direction:'stop',text:'5件已签收货已归位；1件原单未投出'}});x.review.hud();
   assert(/1件原单未投出/.test(x.all.guideText.textContent+' '+x.all.recoveryNote.textContent));assert(!/补发窗口已过/.test(x.all.guideText.textContent+' '+x.all.recoveryNote.textContent));
+});
+
+// V12: the next original-line attempt must have a specific, evidenced exercise.
+const V12_PROGRESS='xiaban-progress-v12';
+const V12_TYPES=['bread','coffee','bread','pot','fish','monday'];
+function v12Catch(cargoId=2,overrides={}){
+  return {cargoId,cargoType:V12_TYPES[cargoId-1],order:cargoId,quality:'good',offsetX:31,speed:0,reason:'offset',correction:'right',at:cargoId*5,retry:false,...overrides};
+}
+function v12Details(badId=2,overrides={}){
+  return V12_TYPES.map((cargoType,index)=>v12Catch(index+1,index+1===badId?overrides:{quality:'perfect',offsetX:0,reason:null,correction:null}));
+}
+function v12FullHarness(catchDetails=v12Details(),extra={},options={}){
+  const old=legacyRun({time:50,catches:6,perfectCatches:5,catchDetails,lastCrash:null});
+  const x=makeHarness({'xiaban-player-v9':JSON.stringify({mode:'normal',variant:0}),'xiaban-last-v8':JSON.stringify({'normal:0':old}),'xiaban-achievements-v7':JSON.stringify({'normal:0':{grade:'S'}}),'xiaban-s-challenges-v9':JSON.stringify({'normal:0':{bestTimeCs:4498,targetSeconds:44}}),'xiaban-stages-v11':JSON.stringify({'normal:0':{badges:{s:true,time:true,full:false},targetSeconds:45}}),...extra},options);
+  x.click('startBtn');return x;
+}
+function v12Progress(x){return JSON.parse(x.data.get(V12_PROGRESS)||'{}');}
+function v12Milestones(overrides={}){return{milestones:{fourCatches:true,twoStops:true,finish:true},bestPerfect:5,...overrides};}
+function v12Graduated(extra={},badges={s:true,time:true,full:true}){
+  return {'xiaban-player-v9':JSON.stringify({mode:'normal',variant:0}),'xiaban-stages-v11':JSON.stringify({'normal:0':{badges,targetSeconds:45},...extra})};
+}
+
+test('a five-of-six full chapter names the actual parcel and carries its offset exercise into original-line retry',()=>{
+  const x=v12FullHarness();
+  practiceFrame(x,{elapsed:1,cargoId:1,type:'bread'});
+  assert(!x.all.practiceHint.classList.contains('hidden'));
+  assert(/第?2件|2号/.test(x.all.practiceHint.textContent),x.all.practiceHint.textContent);
+  assert(/咖啡/.test(x.all.practiceHint.textContent),x.all.practiceHint.textContent);
+  assert(/偏|右|中心/.test(x.all.practiceHint.textContent),x.all.practiceHint.textContent);
+  assert.equal(x.all.guideText.textContent,'提前挪到落点，到位松手');
+  practiceFrame(x,{elapsed:9,cargoId:2,type:'coffee'});
+  assert(!x.all.practiceHint.classList.contains('hidden'),'the exercise did not return at the real parcel preview');
+  assert(/咖啡/.test(x.all.practiceHint.textContent));
+  winResult(x,{elapsed:51,catches:6,perfectCatches:5,lastCrash:null,catchDetails:v12Details()});
+  assert(/咖啡/.test(x.all.nextRunHint.textContent+' '+x.all.resultPractice.textContent),'terminal feedback lost the specific exercise');
+  const saved=recentRecords(x)['normal:0'].catchDetails;
+  assert(saved.some(d=>d.cargoId===2&&d.quality==='good'&&d.reason==='offset'),'real parcel detail was not retained');
+  x.click('restartBtn');practiceFrame(x,{elapsed:9,cargoId:2,type:'coffee'});
+  assert(!x.all.practiceHint.classList.contains('hidden'));assert(/咖啡/.test(x.all.practiceHint.textContent));
+});
+
+test('a speed-only precision error recommends braking rather than inventing a lateral mistake',()=>{
+  const x=v12FullHarness(v12Details(2,{offsetX:4,speed:115,reason:'speed',correction:'brake'}));
+  practiceFrame(x,{elapsed:9,cargoId:2,type:'coffee'});const text=x.all.practiceHint.textContent;
+  assert(/咖啡/.test(text)&&/快|松手|刹|停稳/.test(text),text);
+  assert(!/偏左|偏右|落在车[左右]侧/.test(text),'centred but moving catch was falsely labelled lateral: '+text);
+});
+
+test('an offset-and-speed catch explains both observed reasons without replacing the current foreground action',()=>{
+  const x=v12FullHarness(v12Details(4,{offsetX:-35,speed:120,reason:'offset_speed',correction:'left'}));
+  practiceFrame(x,{elapsed:19,cargoId:4,type:'pot'});const text=x.all.practiceHint.textContent;
+  assert(/锅/.test(text)&&/左|偏|中心/.test(text)&&/快|松手|刹|停稳/.test(text),text);
+  assert.equal(x.all.guideText.textContent,'提前挪到落点，到位松手');
+});
+
+test('precision practice distinguishes the third parcel of bread from the first identical type',()=>{
+  const x=v12FullHarness(v12Details(3));
+  practiceFrame(x,{elapsed:8,cargoId:1,type:'bread'});
+  assert(x.all.practiceHint.classList.contains('hidden'),'the first bread inherited the third bread exercise');
+  practiceFrame(x,{elapsed:14,cargoId:3,type:'bread'});
+  assert(!x.all.practiceHint.classList.contains('hidden'));assert(/第?3件|3号/.test(x.all.practiceHint.textContent));
+});
+
+test('an unknown legacy five-of-six record never fabricates a named parcel for precision practice',()=>{
+  const x=v12FullHarness([]);practiceFrame(x,{elapsed:1,cargoId:1,type:'bread'});
+  const text=x.all.practiceHint.classList.contains('hidden')?'':x.all.practiceHint.textContent;
+  assert(!/咖啡|锅|鱼|第2件|第3件/.test(text),text);
+  assert(/6|全|精准/.test(x.all.streak.textContent+' '+x.all.nextChallengeHint.textContent));
+});
+
+test('precision practice before its parcel is thrown is neutral at an unrelated early failure',()=>{
+  const x=v12FullHarness();x.end({elapsed:5,catches:1,perfectCatches:1,catchDetails:[v12Catch(1,{quality:'perfect',reason:null,correction:null,offsetX:0})],lastCrash:{cargoId:1,cargoType:'bread',cause:'从左侧滑落',at:5}});
+  assert.equal(x.all.resultPractice.dataset.state,'neutral');assert(/未练到|尚未/.test(x.all.resultPractice.textContent),x.all.resultPractice.textContent);
+  assert(!/本次仍|接偏|又/.test(x.all.resultPractice.textContent));
+});
+
+test('a real ordinary catch of the practised parcel is failed precision practice',()=>{
+  const x=v12FullHarness(),detail=v12Catch();practiceFrame(x,{elapsed:10,cargoId:2,type:'coffee',cargo:[parcel(2,'coffee')]});emitGame(x,'catch',detail);x.review.hud();
+  assert.equal(x.all.practiceHint.dataset.state,'failed');assert(/咖啡/.test(x.all.practiceHint.textContent));
+  winResult(x,{catches:6,perfectCatches:5,lastCrash:null,catchDetails:v12Details()});
+  assert.equal(x.all.resultPractice.dataset.state,'failed');assert(/偏|精准未|仍未|非精准/.test(x.all.resultPractice.textContent),x.all.resultPractice.textContent);
+});
+
+test('a true perfect catch fulfils the parcel exercise even if the whole run later fails elsewhere',()=>{
+  const x=v12FullHarness(),detail=v12Catch(2,{quality:'perfect',reason:null,correction:null,offsetX:0});
+  practiceFrame(x,{elapsed:10,cargoId:2,type:'coffee',cargo:[parcel(2,'coffee')]});emitGame(x,'catch',detail);x.review.hud();
+  assert.equal(x.all.practiceHint.dataset.state,'achieved');
+  x.end({elapsed:20,catches:3,perfectCatches:3,catchDetails:[detail],lastCrash:{cargoId:4,cargoType:'pot',cause:'从右侧滑落',at:20}});
+  assert.equal(x.all.resultPractice.dataset.state,'achieved');assert(/咖啡/.test(x.all.resultPractice.textContent));
+  assert(/精准/.test(x.all.resultPractice.textContent));assert(!/整趟.*成功|已安全收工/.test(x.all.resultPractice.textContent));
+});
+
+test('a real missed precision parcel is a failed attempt rather than not-yet-practised',()=>{
+  const x=v12FullHarness(),miss={cargoId:2,cargoType:'coffee',cause:'漏接',at:10};
+  emitGame(x,'spawn',{cargoId:2,cargoType:'coffee'});emitGame(x,'crash',miss);
+  x.end({elapsed:10,catches:1,perfectCatches:1,catchDetails:[],lastCrash:miss});
+  assert.equal(x.all.resultPractice.dataset.state,'failed');assert(/咖啡/.test(x.all.resultPractice.textContent));assert(/漏接|未接/.test(x.all.resultPractice.textContent));assert(!/未练到/.test(x.all.resultPractice.textContent));
+});
+
+test('restoring a good catch does not retroactively turn the precision exercise into perfect',()=>{
+  const x=v12FullHarness(),detail=v12Catch();emitGame(x,'catch',detail);x.force({cargo:[parcel(2,'coffee',{restored:true})]});emitGame(x,'recovery',{phase:'restored'});
+  winResult(x,{catches:6,perfectCatches:5,lastCrash:null,cargo:[parcel(2,'coffee',{restored:true})],catchDetails:v12Details()});
+  assert.equal(x.all.resultPractice.dataset.state,'failed');
+  const saved=recentRecords(x)['normal:0'].catchDetails.filter(d=>d.cargoId===2);
+  assert.equal(saved.length,1);assert.equal(saved[0].quality,'good');assert.equal(saved[0].offsetX,31);
+});
+
+test('the next full-chapter retry still prioritizes an actual crash over an earlier off-centre catch',()=>{
+  const x=v12FullHarness();winResult(x,{catches:6,perfectCatches:5,lives:2,catchDetails:v12Details(),lastCrash:{cargoId:5,cargoType:'fish',cause:'从左侧滑落',side:'left',at:30}});
+  x.click('restartBtn');practiceFrame(x,{elapsed:1,cargoId:1,type:'bread'});
+  assert(/鱼/.test(x.all.practiceHint.textContent));assert(!/咖啡/.test(x.all.practiceHint.textContent));
+});
+
+test('an unthrown parcel cannot be invented as an imprecise signed parcel',()=>{
+  const x=v12FullHarness(v12Details().filter(d=>d.cargoId!==2));
+  winResult(x,{catches:5,perfectCatches:5,lastCrash:null,catchDetails:v12Details(0).filter(d=>d.cargoId!==2),job:{unthrownCount:1,retryExpiredCount:0,unavailableItems:[{cargoId:2,cargoType:'coffee',order:2,kind:'unthrown',reasonText:'投递需在39秒前留够预告，本趟窗口不足。'}],cutoffSeconds:39}});
+  const details=recentRecords(x)['normal:0'].catchDetails;assert(!details.some(d=>d.cargoId===2));
+  x.click('restartBtn');practiceFrame(x,{elapsed:1,cargoId:1,type:'bread'});
+  const text=x.all.practiceHint.classList.contains('hidden')?'':x.all.practiceHint.textContent;
+  assert(!/咖啡.*接偏|咖啡.*太快/.test(text),text);
+});
+
+const V12_UNTHROWN={cargoId:6,cargoType:'monday',order:6,kind:'unthrown',reasonText:'投递需在39秒前留够预告，本趟窗口不足。'};
+const V12_EXPIRED={cargoId:2,cargoType:'coffee',order:2,kind:'retryExpired',reasonText:'补发需在39秒前留够预告，本趟不再补发。'};
+for(const [label,items,unthrownCount,retryExpiredCount]of [['original',[V12_UNTHROWN],1,0],['retry',[V12_EXPIRED],0,1],['mixed',[V12_UNTHROWN,V12_EXPIRED],1,1]])test('the '+label+' unavailable-delivery explanation survives into the report with identity and deadline reason',()=>{
+  const x=normalHarness();winResult(x,{catches:5,perfectCatches:5,lives:2,lastCrash:null,job:{unthrownCount,retryExpiredCount,unavailableItems:items,cutoffSeconds:39,deliveriesClosed:true}});
+  assert(!x.all.resultDelivery.classList.contains('hidden'));
+  assert.equal(x.all.resultDelivery.dataset.state,'unavailable');
+  assert.equal(String(x.all.resultDelivery.dataset.unthrown),String(unthrownCount));assert.equal(String(x.all.resultDelivery.dataset.retryExpired),String(retryExpiredCount));
+  const text=x.all.resultDelivery.textContent;
+  for(const item of items)assert(text.includes(item.cargoType==='monday'?'周一':'咖啡'),text);
+  assert(/39/.test(text)&&/预告|窗口/.test(text),text);
+  assert(/不再|本趟|结束/.test(text),text);
+  if(label==='original'){assert(/未投/.test(text));assert(!/漏接.*周一|周一.*漏接|补发过期/.test(text),text)}
+  if(label==='retry'){assert(/补发/.test(text));assert(!/原单未投/.test(text),text)}
+  x.click('resultMenu');x.click('resumeBtn');assert.equal(x.all.resultDelivery.textContent,text);assert(!x.all.resultDelivery.classList.contains('hidden'));
+});
+
+test('a clean report hides the previous unavailable-delivery explanation and retry clears it before the next attempt',()=>{
+  const x=normalHarness();winResult(x,{job:{unthrownCount:1,retryExpiredCount:0,unavailableItems:[V12_UNTHROWN],cutoffSeconds:39}});assert(!x.all.resultDelivery.classList.contains('hidden'));
+  x.click('restartBtn');assert(x.all.resultDelivery.classList.contains('hidden'));
+  winResult(x,{lastCrash:null,job:{unthrownCount:0,retryExpiredCount:0,unavailableItems:[],cutoffSeconds:39}});assert(x.all.resultDelivery.classList.contains('hidden'));
+});
+
+test('a graduated route recommends the next unfinished line and previews its remaining chapter',()=>{
+  const x=normalHarness(v12Graduated({'normal:1':{badges:{s:true,time:true,full:true},targetSeconds:45},'normal:2':{badges:{s:true,time:false,full:false},targetSeconds:48}}));
+  winResult(x,{catches:6,perfectCatches:6,lastCrash:null});
+  assert.equal(x.all.resultDock.dataset.graduated,'true');assert(!x.all.graduateNextBtn.classList.contains('hidden'));
+  assert.equal(x.all.graduateNextBtn.dataset.mode,'normal');assert.equal(String(x.all.graduateNextBtn.dataset.variant),'2');assert.equal(x.all.graduateNextBtn.dataset.key,'normal:2');
+  const text=x.all.graduateNextBtn.textContent+' '+x.all.routeNextHint.textContent;
+  assert(/测试路线2/.test(text),text);assert(/1\s*\/\s*3/.test(text),text);assert(/限时|48/.test(text),text);
+  x.click('graduateNextBtn');assert.equal(x.latest().mode,'normal');assert.equal(x.latest().variant,2);assert.equal(x.review.recordKey(),'normal:2');
+});
+
+for(const action of['restartBtn','r',' '])test('graduation keeps '+JSON.stringify(action)+' as an original-line retry despite the new primary recommendation',()=>{
+  const x=normalHarness(v12Graduated());winResult(x,{catches:6,perfectCatches:6,lastCrash:null});const original=x.latest();
+  if(action==='restartBtn')x.click(action);else x.key(action);
+  assert(same(original,x.latest()),JSON.stringify({original,after:x.latest()}));assert(x.all.graduateNextBtn.classList.contains('hidden'));
+});
+
+test('normal-line graduation recommends today only after all three ordinary lines are complete',()=>{
+  const x=normalHarness(v12Graduated(Object.fromEntries([1,2].map(i=>['normal:'+i,{badges:{s:true,time:true,full:true},targetSeconds:45}]))));
+  winResult(x,{catches:6,perfectCatches:6,lastCrash:null});
+  assert.equal(x.all.graduateNextBtn.dataset.mode,'daily');assert.equal(x.all.graduateNextBtn.dataset.key,'daily:2026-10-30');
+  assert.equal(stageRecords(x)['daily:2026-10-30'],undefined,'a recommendation fabricated an unplayed daily-stage entry');
+  x.click('graduateNextBtn');assert.equal(x.latest().mode,'daily');assert.equal(x.latest().dateSeed,'2026-10-30');
+});
+
+test('all current routes complete yields honest free play instead of a fake new challenge',()=>{
+  const extra=Object.fromEntries([1,2].map(i=>['normal:'+i,{badges:{s:true,time:true,full:true},targetSeconds:45}]));extra['daily:2026-10-30']={badges:{s:true,time:true,full:true},targetSeconds:45};
+  const x=normalHarness(v12Graduated(extra));winResult(x,{catches:6,perfectCatches:6,lastCrash:null});
+  assert(x.all.graduateNextBtn.classList.contains('hidden'));assert(/自由/.test(x.all.restartBtn.textContent+' '+x.all.nextRunHint.textContent));
+});
+
+test('a newly recommended route does not carry over the graduated route precision exercise',()=>{
+  const x=v12FullHarness();winResult(x,{catches:6,perfectCatches:6,lastCrash:null,catchDetails:v12Details(0)});
+  x.click('graduateNextBtn');practiceFrame(x,{elapsed:9,cargoId:2,type:'coffee'});
+  assert(x.all.practiceHint.classList.contains('hidden'),'old precision exercise leaked into the next route');assert.equal(stageRecords(x)['normal:0'].badges.full,true);
+});
+
+test('ordinary A completion earns small milestones without lowering any S or full-chapter conditions',()=>{
+  const x=normalHarness();winResult(x,{catches:6,perfectCatches:5,lives:2,lastCrash:null});const progress=v12Progress(x)['normal:0'];
+  assert.deepEqual(progress.milestones,{fourCatches:true,twoStops:true,finish:true});assert.equal(progress.bestPerfect,5);
+  assert.deepEqual(stageRecords(x)['normal:0'].badges,{s:false,time:false,full:false});assert(!x.all.resultMilestone.classList.contains('hidden'));
+  assert.equal(x.all.resultMilestone.dataset.state,'achieved');assert.equal(x.all.resultMilestone.dataset.kind,'milestone');assert(!/S章.*到手|全单精准章.*到手/.test(x.all.resultMilestone.textContent));
+});
+
+test('four actual signatures can earn a local milestone even when the run later fails before station one',()=>{
+  const x=normalHarness();x.end({catches:4,perfectCatches:2,lastCrash:null,tail:completedTail(0)});const progress=v12Progress(x)['normal:0'];
+  assert.equal(progress.milestones.fourCatches,true);assert.equal(progress.milestones.twoStops,false);assert.equal(progress.milestones.finish,false);
+  assert(!x.all.resultMilestone.classList.contains('hidden'));assert(/签收|4件/.test(x.all.resultMilestone.textContent));assert(!/安全收工.*达成|整趟.*更稳/.test(x.all.resultMilestone.textContent));
+});
+
+test('parking both stations can be recognized without fabricating a safe arrival',()=>{
+  const x=normalHarness();x.end({finishReason:'unsafe_arrival',catches:4,perfectCatches:2,lastCrash:null,tail:completedTail(2)});const p=v12Progress(x)['normal:0'];
+  assert.equal(p.milestones.twoStops,true);assert.equal(p.milestones.finish,false);assert(/两站|停稳/.test(x.all.resultMilestone.textContent));
+});
+
+test('an actual higher precision count remains useful in a failed full-chapter attempt and is labelled as a local best',()=>{
+  const extra={[V12_PROGRESS]:JSON.stringify({'normal:0':v12Milestones({bestPerfect:5})})};const x=v12FullHarness(v12Details(),extra);
+  x.end({catches:6,perfectCatches:6,lastCrash:{cargoId:4,cargoType:'pot',cause:'从右侧滑落',at:35},catchDetails:v12Details(0)});
+  assert.equal(v12Progress(x)['normal:0'].bestPerfect,6);assert(!x.all.resultMilestone.classList.contains('hidden'));
+  assert.equal(x.all.resultMilestone.dataset.kind,'personal-best');assert(/精准|单项/.test(x.all.resultMilestone.textContent)&&/6/.test(x.all.resultMilestone.textContent),x.all.resultMilestone.textContent);
+  assert(!/这趟更稳|整趟.*进步|安全收工.*达成/.test(x.all.resultMilestone.textContent));assert.equal(achievementRecords(x)['normal:0'].grade,'S');assert.equal(stageRecords(x)['normal:0'].badges.full,false);
+});
+
+test('small milestones and best precision never retreat after a worse attempt or reload',()=>{
+  const initial=v12Milestones();const x=normalHarness({[V12_PROGRESS]:JSON.stringify({'normal:0':initial})});x.end({catches:1,perfectCatches:1,lastCrash:null,tail:completedTail(0)});
+  assert.deepEqual(v12Progress(x)['normal:0'],initial);assert(x.all.resultMilestone.classList.contains('hidden'));
+  const reopened=makeHarness(Object.fromEntries(x.data));assert.deepEqual(v12Progress(reopened)['normal:0'],initial);assert(reopened.all.resultMilestone.classList.contains('hidden'));assert.equal(reopened.audioCalls.oscillators,0);
+});
+
+test('trusted historical milestone evidence imports silently without fabricating a first-time reward',()=>{
+  const x=makeHarness({'xiaban-last-v8':JSON.stringify({'normal:0':legacyRun({catches:6,stops:2,perfectCatches:5,lives:2})})});const progress=v12Progress(x)['normal:0'];
+  assert.deepEqual(progress.milestones,{fourCatches:true,twoStops:true,finish:true});assert.equal(progress.bestPerfect,5);assert(x.all.resultMilestone.classList.contains('hidden'));assert.equal(x.audioCalls.oscillators,0);
+});
+
+test('historical partial progress does not invent an unplayed second station or a finished trip',()=>{
+  const old=legacyRun({won:false,catches:4,stops:1,perfectCatches:3,lives:0,finishReason:'tail_incomplete',tail:{step:2}});
+  const x=makeHarness({'xiaban-last-v8':JSON.stringify({'normal:0':old})});const p=v12Progress(x)['normal:0'];
+  assert.equal(p.milestones.fourCatches,true);assert.equal(p.milestones.twoStops,false);assert.equal(p.milestones.finish,false);assert.equal(p.bestPerfect,3);
+});
+
+test('S chapter celebration keeps priority while earned small milestones are still saved',()=>{
+  const x=normalHarness();winResult(x,{catches:4,perfectCatches:3,lastCrash:null});
+  assert(!x.all.stageReward.classList.contains('hidden'));assert(x.all.resultMilestone.classList.contains('hidden'));
+  assert.deepEqual(v12Progress(x)['normal:0'].milestones,{fourCatches:true,twoStops:true,finish:true});
+});
+
+test('duplicate finish and replay cannot re-award a small milestone or precision-best celebration',()=>{
+  const x=normalHarness();x.click('soundBtn');winResult(x,{catches:6,perfectCatches:5,lives:2,lastCrash:null});
+  const before={storage:x.data.get(V12_PROGRESS),text:x.all.resultMilestone.textContent,audio:x.audioCalls.oscillators,effects:{...x.review.effects()}};
+  x.review.finish(true);assert.equal(x.data.get(V12_PROGRESS),before.storage);assert.equal(x.all.resultMilestone.textContent,before.text);assert.equal(x.audioCalls.oscillators,before.audio);assert.deepEqual({...x.review.effects()},before.effects);
+  x.review.accident({event:{cargoType:'pot'},frames:[{elapsed:1},{elapsed:2}]});x.click('replayBtn');x.click('exitReplay');assert.equal(x.data.get(V12_PROGRESS),before.storage);assert.equal(x.audioCalls.oscillators,before.audio);
+});
+
+test('new milestones respect mute and reduced-motion preferences',()=>{
+  const x=makeHarness({'xiaban-tutorial-v3':'done'},{reducedMotion:true}),baseline=makeHarness({'xiaban-tutorial-v3':'done',[V12_PROGRESS]:JSON.stringify({'normal:0':v12Milestones()})},{reducedMotion:true});
+  for(const h of[x,baseline]){h.click('menuNormal');winResult(h,{catches:6,perfectCatches:5,lives:2,lastCrash:null})}
+  assert.equal(x.audioCalls.oscillators,0);assert.equal(x.review.effects().particles,baseline.review.effects().particles);assert(!x.all.resultMilestone.classList.contains('hidden'));
+});
+
+test('small milestones remain separate by ordinary route and the original daily date across midnight',()=>{
+  const x=normalHarness();x.end({catches:4,perfectCatches:2,lastCrash:null,tail:completedTail(0)});x.click('resultNewRoute');x.end({catches:2,perfectCatches:1,lastCrash:null,tail:completedTail(0)});
+  assert.equal(v12Progress(x)['normal:0'].milestones.fourCatches,true);assert.equal(v12Progress(x)['normal:1'].milestones.fourCatches,false);
+  x.click('menuDaily');x.end({catches:4,perfectCatches:2,lastCrash:null,tail:completedTail(0)});x.setDay('2026-10-31');x.click('restartBtn');winResult(x,{catches:5,perfectCatches:4,lives:2,lastCrash:null});
+  assert.equal(v12Progress(x)['daily:2026-10-30'].milestones.finish,true);assert.equal(v12Progress(x)['daily:2026-10-31'],undefined);
+});
+
+test('tutorial never grants or rewrites formal milestones and clears the new report sections',()=>{
+  const x=normalHarness();winResult(x,{catches:6,perfectCatches:5,lives:2,lastCrash:null,job:{unthrownCount:1,retryExpiredCount:0,unavailableItems:[V12_UNTHROWN],cutoffSeconds:39}});const before=x.data.get(V12_PROGRESS);
+  x.click('menuTutorial');winResult(x,{catches:6,perfectCatches:6,lastCrash:null});assert.equal(x.data.get(V12_PROGRESS),before);
+  for(const id of['resultMilestone','resultDelivery','graduateNextBtn','milestoneProgress'])assert(x.all[id].classList.contains('hidden'),id+' leaked into tutorial');
+});
+
+test('badge controls expose concise real conditions rather than leaving chapter names unexplained',()=>{
+  const x=stagedHarness({s:true,time:false,full:false},45);
+  for(const id of['badgeS','badgeTime','badgeFull'])assert(new RegExp('<button\\b[^>]*id="'+id+'"').test(html),id+' is not an accessible button');
+  x.click('badgeFull');assert(!x.all.badgeInfo.classList.contains('hidden'));assert(/6/.test(x.all.badgeInfo.textContent)&&/精准/.test(x.all.badgeInfo.textContent)&&/S/.test(x.all.badgeInfo.textContent),x.all.badgeInfo.textContent);
+  x.click('badgeTime');assert(/45/.test(x.all.badgeInfo.textContent)&&/S/.test(x.all.badgeInfo.textContent),x.all.badgeInfo.textContent);
+  x.click('badgeS');assert(/3/.test(x.all.badgeInfo.textContent)&&/翻车/.test(x.all.badgeInfo.textContent)&&/扶正/.test(x.all.badgeInfo.textContent),x.all.badgeInfo.textContent);
+});
+
+test('a real good catch of bread one cannot fail the bread-three precision exercise',()=>{
+  const x=v12FullHarness(v12Details(3));emitGame(x,'spawn',{cargoId:1,cargoType:'bread'});emitGame(x,'catch',v12Catch(1));
+  x.end({elapsed:8,catches:1,perfectCatches:0,catchDetails:[v12Catch(1)],lastCrash:{cargoId:1,cargoType:'bread',cause:'从右侧滑落',at:8}});
+  assert.equal(x.all.resultPractice.dataset.state,'neutral');assert(/第?3件|3号/.test(x.all.resultPractice.textContent));assert(!/本次漏接|这次仍未精准/.test(x.all.resultPractice.textContent));
+});
+
+test('malformed catch details and unknown quality never create a made-up precision exercise',()=>{
+  const broken=[null,'coffee',{cargoId:0,cargoType:'coffee',quality:'good'},{cargoId:7,cargoType:'coffee',quality:'good'},{cargoId:2,cargoType:'unknown',quality:'good'},{cargoId:2,cargoType:'coffee',quality:'excellent'},{cargoId:2.5,cargoType:'coffee',quality:'good'}];
+  const x=v12FullHarness(broken);practiceFrame(x,{elapsed:1,cargoId:1,type:'bread'});
+  const text=x.all.practiceHint.classList.contains('hidden')?'':x.all.practiceHint.textContent;
+  assert(!/咖啡|unknown|第7件|第0件/.test(text),text);
+  winResult(x,{catches:6,perfectCatches:5,lastCrash:null,catchDetails:broken});assert.deepEqual(recentRecords(x)['normal:0'].catchDetails,[]);
+});
+
+test('a repeated catch identity preserves its first real quality rather than replacing good with perfect',()=>{
+  const x=v12FullHarness(),good=v12Catch(),later=v12Catch(2,{quality:'perfect',reason:null,correction:null,offsetX:0,at:12});
+  emitGame(x,'catch',good);emitGame(x,'catch',later);
+  winResult(x,{catches:6,perfectCatches:5,lastCrash:null,catchDetails:[good,later]});
+  assert.equal(x.all.resultPractice.dataset.state,'failed');
+  const records=recentRecords(x)['normal:0'].catchDetails.filter(d=>d.cargoId===2);assert.equal(records.length,1);assert.equal(records[0].quality,'good');assert.equal(records[0].at,10);
+});
+
+test('a valid engine snapshot can establish parcel precision even when no UI catch callback was observed',()=>{
+  const x=v12FullHarness(),perfect=v12Catch(2,{quality:'perfect',offsetX:0,reason:null,correction:null});
+  x.end({elapsed:20,catches:2,perfectCatches:2,lastCrash:{cargoId:4,cargoType:'pot',cause:'从左侧滑落',at:20},catchDetails:[perfect]});
+  assert.equal(x.all.resultPractice.dataset.state,'achieved');assert(/咖啡.*精准/.test(x.all.resultPractice.textContent));
+});
+
+test('an invalid unavailable-delivery identity is ignored rather than shown as a missing real parcel',()=>{
+  const bad=[null,{...V12_UNTHROWN,cargoId:0},{...V12_UNTHROWN,cargoId:7},{...V12_UNTHROWN,cargoId:1.5},{...V12_UNTHROWN,cargoType:'unknown'},{...V12_UNTHROWN,kind:'waiting'}];
+  const x=normalHarness();winResult(x,{lastCrash:null,job:{unthrownCount:0,retryExpiredCount:0,unavailableItems:bad,cutoffSeconds:39}});
+  assert(x.all.resultDelivery.classList.contains('hidden'),'an impossible parcel got a delivery failure report');assert.deepEqual(recentRecords(x)['normal:0'].deliveryOutcomes,[]);
+});
+
+test('graduating an old daily after midnight recommends a real unfinished normal line while R keeps the old daily',()=>{
+  const stored={'xiaban-player-v9':JSON.stringify({mode:'daily',variant:1}),'xiaban-stages-v11':JSON.stringify({'daily:2026-10-30':{badges:{s:true,time:true,full:true},targetSeconds:45},'normal:2':{badges:{s:true,time:true,full:true},targetSeconds:45},'normal:0':{badges:{s:true,time:false,full:false},targetSeconds:46}})};
+  const x=makeHarness(stored);x.click('startBtn');x.setDay('2026-10-31');winResult(x,{catches:6,perfectCatches:6,lastCrash:null});
+  assert.equal(x.all.graduateNextBtn.dataset.mode,'normal');assert.equal(x.all.graduateNextBtn.dataset.key,'normal:0');assert.equal(stageRecords(x)['daily:2026-10-31'],undefined);
+  x.key('r');assert.equal(x.latest().mode,'daily');assert.equal(x.latest().dateSeed,'2026-10-30');
+  winResult(x,{catches:6,perfectCatches:6,lastCrash:null});x.click('graduateNextBtn');assert.equal(x.latest().mode,'normal');assert.equal(x.latest().variant,0);
+});
+
+test('a trusted V11 full chapter silently imports its proven six-perfect finish and short milestones',()=>{
+  const x=makeHarness(v12Graduated()),p=v12Progress(x)['normal:0'];
+  assert.deepEqual(p.milestones,{fourCatches:true,twoStops:true,finish:true});assert.equal(p.bestPerfect,6);
+  assert(x.all.resultMilestone.classList.contains('hidden'));assert(x.all.stageReward.classList.contains('hidden'));assert.equal(x.audioCalls.oscillators,0);
+  assert.deepEqual(stageRecords(x)['normal:0'].badges,{s:true,time:true,full:true});
+});
+
+test('an S chapter alone cannot fabricate a six-perfect full-chapter history',()=>{
+  const x=makeHarness(v12Graduated({},{s:true,time:false,full:false})),p=v12Progress(x)['normal:0'];
+  assert((p?.bestPerfect||0)<6);assert.equal(stageRecords(x)['normal:0'].badges.full,false);assert(x.all.resultMilestone.classList.contains('hidden'));
+});
+
+test('an existing V12 progress record is not silently rewritten by old chapter migration on reload',()=>{
+  const original={milestones:{fourCatches:true,twoStops:false,finish:false},bestPerfect:3};
+  const x=makeHarness({...v12Graduated(),[V12_PROGRESS]:JSON.stringify({'normal:0':original})});
+  assert.deepEqual(v12Progress(x)['normal:0'],original);assert(x.all.resultMilestone.classList.contains('hidden'));assert.equal(x.audioCalls.oscillators,0);
 });

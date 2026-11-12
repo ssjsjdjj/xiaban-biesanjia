@@ -1067,7 +1067,7 @@ test('road preview and active warning expose distinct timing, freeze on pause, a
 test('job counts physical delivery IDs once and distinguishes a missed item, queued retry, retry flight and real signature', () => {
   const game = new ShiftEngine();
   game.reset();
-  assert.deepEqual({ ...game.snapshot().job, detail: '' }, { minimumMet: false, required: 4, total: 6, sent: 0, remainingDeliveries: 6, airborneUnsigned: 0, retryCount: 0, unthrownCount: 0, retryExpiredCount: 0, unavailableDeliveries: 0, deliveriesClosed: false, phase: 'delivery', detail: '' });
+  assert.deepEqual({ ...game.snapshot().job, detail: '' }, { minimumMet: false, required: 4, total: 6, sent: 0, remainingDeliveries: 6, airborneUnsigned: 0, retryCount: 0, unthrownCount: 0, retryExpiredCount: 0, unavailableDeliveries: 0, unavailableItems: [], cutoffSeconds: 39, deliveriesClosed: false, phase: 'delivery', detail: '' });
   until(game, state => state.cargo.some(cargo => cargo.id === 2), 10);
   let state = game.snapshot();
   assert.equal(state.job.sent, 2);
@@ -1237,7 +1237,7 @@ test('a closed delivery window reports unsent work honestly without promising an
   assert.equal(state.job.remainingDeliveries, 2);
   assert.equal(state.job.phase, 'settling');
   assert.equal(state.job.deliveriesClosed, true);
-  assert.ok(state.job.detail.includes('投递已截止'));
+  assert.ok(state.job.detail.includes('后续投递已结束'));
   assert.ok(state.job.detail.includes('2件原单未投出'));
   assert.ok(!state.job.detail.includes('待投递'));
   assert.ok(!state.guidance.text.includes('等下一件'));
@@ -1712,4 +1712,159 @@ test('presentation outcome counts and recovery text freeze on pause and clear on
   assert.equal(reset.paused, false);
   const fresh = new ShiftEngine();fresh.reset('normal', game.dateSeed, { variant: game.route.variant });
   assert.deepEqual(game._dropPlan, fresh._dropPlan);
+});
+
+test('real first signature records the same catch facts in the event and snapshot without changing rewards', () => {
+  const events = [], game = new ShiftEngine(event => events.push(event));
+  game.reset();
+  const state = advance(game, 3), event = events.find(event => event.type === 'catch');
+  assert.equal(state.catches, 1);
+  assert.equal(state.perfectCatches, 1);
+  assert.equal(state.catchDetails.length, 1);
+  const detail = state.catchDetails[0];
+  for (const key of ['cargoId', 'cargoType', 'order', 'quality', 'offsetX', 'speed', 'reason', 'correction', 'at', 'retry']) assert.equal(detail[key], event[key], key);
+  assert.equal(detail.cargoId, 1);
+  assert.equal(detail.order, 1);
+  assert.equal(detail.quality, 'perfect');
+  assert.equal(detail.reason, null);
+  assert.equal(detail.correction, null);
+  assert.equal(detail.retry, false);
+  assert.equal(event.points, 50);
+  assert.ok(Math.abs(detail.offsetX) <= 24);
+  assert.ok(Math.abs(detail.speed) < 95);
+  assert.equal(detail.at, event.elapsed);
+});
+
+test('catch feedback separates centre offset from braking speed at the exact existing precision thresholds', () => {
+  const cases = [
+    { offset: 24, speed: 94.99, quality: 'perfect', reason: null, correction: null },
+    { offset: 24.01, speed: 0, quality: 'good', reason: 'offset', correction: 'right' },
+    { offset: -31, speed: 0, quality: 'good', reason: 'offset', correction: 'left' },
+    { offset: 0, speed: 95, quality: 'good', reason: 'speed', correction: 'brake' },
+    { offset: -20, speed: -100, quality: 'good', reason: 'speed', correction: 'brake' },
+    { offset: 35, speed: 100, quality: 'good', reason: 'offset_speed', correction: 'right' }
+  ];
+  for (const expected of cases) {
+    const game = new ShiftEngine(); game.reset();
+    const info = { id: 2, type: 'coffee', x: 330, caught: false };
+    game._allCargo.push(info);
+    const item = game._createCargo(info, game.truck.x + expected.offset, 545);
+    game.truck.vx = expected.speed;
+    game.elapsed = 12.345;
+    game._registerCatch(item);
+    const detail = game.snapshot().catchDetails[0];
+    assert.equal(detail.cargoId, 2);
+    assert.equal(detail.cargoType, 'coffee');
+    assert.equal(detail.order, 2);
+    assert.equal(detail.quality, expected.quality);
+    assert.equal(detail.reason, expected.reason);
+    assert.equal(detail.correction, expected.correction);
+    assert.ok(Math.abs(detail.offsetX - expected.offset) < 1e-9);
+    assert.equal(detail.speed, expected.speed);
+    assert.equal(detail.at, 12.345);
+    assert.equal(game.perfectCatches, expected.quality === 'perfect' ? 1 : 0);
+    assert.equal(game.score, expected.quality === 'perfect' ? 50 : 25);
+  }
+});
+
+test('catch audit is first-signature only, independent of observers and retained through signed-cargo restoration', () => {
+  const events = [], game = new ShiftEngine(event => { events.push(event); if (event.type === 'catch') { event.offsetX = -999; event.reason = 'observer'; } });
+  game.reset(); game._pendingDelivery = null;
+  const info = { id: 2, type: 'coffee', x: 330, caught: false };
+  game._allCargo.push(info);
+  const item = game._createCargo(info, 245, 545);
+  game._registerCatch(item);
+  const before = game.snapshot().catchDetails;
+  assert.equal(before[0].offsetX, 35);
+  assert.equal(before[0].reason, 'offset');
+  const exposed = game.snapshot().catchDetails;
+  exposed[0].offsetX = 888; exposed.push({ cargoId: 6 });
+  game._registerCatch(item);
+  game._crash(item);
+  game._restoreCargo();
+  for (const restored of game.cargo) game._registerCatch(restored);
+  assert.deepEqual(game.snapshot().catchDetails, before);
+  assert.equal(events.filter(event => event.type === 'catch').length, 1);
+  assert.equal(game.catches, 1);
+  assert.equal(game.perfectCatches, 0);
+});
+
+test('a real retry can create its first signature audit but never a second signature after restoration', () => {
+  const game = new ShiftEngine(); game.reset(); game._pendingDelivery = null;
+  const plan = game._dropPlan[1];
+  game._sentIds.add(plan.id);
+  game._spawnDelivery({ ...plan, retry: true });
+  const item = game.cargo.find(cargo => cargo.id === plan.id);
+  Matter.Body.setPosition(item.body, { x: game.truck.x, y: 545 });
+  game._registerCatch(item);
+  const detail = game.snapshot().catchDetails[0];
+  assert.equal(detail.cargoId, 2);
+  assert.equal(detail.retry, true);
+  assert.equal(detail.quality, 'perfect');
+  assert.equal(game.catches, 1);
+  assert.equal(game.retries, 1);
+  game._registerCatch(item);
+  assert.equal(game.snapshot().catchDetails.length, 1);
+});
+
+test('the natural fast light-heavy result explains the exact unthrown original before the 39-second deadline', () => {
+  const reports = [];
+  const state = keyboardGuidanceRun(.15, 70, { input: 'touch', variant: 2, seed: '2026-11-11', onState: current => { if (current.job.unthrownCount) reports.push(current); } });
+  const first = reports[0];
+  assert.ok(first.elapsed < 39, 'the known case withdraws the original while a full preview no longer fits');
+  const job = first.job;
+  assert.equal(job.cutoffSeconds, 39);
+  assert.equal(job.unavailableItems.length, 1);
+  assert.deepEqual(job.unavailableItems[0], { cargoId: 6, cargoType: 'monday', order: 6, kind: 'unthrown', reasonText: '原单投递需在39秒前留够接货预告；本趟窗口不足，不再投出。' });
+  assert.ok(job.detail.includes('第6件沉重的周一'));
+  assert.ok(job.detail.includes('39秒前留够接货预告'));
+  assert.ok(job.detail.includes('先把已签收货稳住'));
+  assert.ok(!/39秒已到|已过39秒|稍后补发/.test(job.detail));
+  assert.equal(state.status, 'win');
+  assert.equal(state.score, 1170);
+  assert.equal(state.catches, 5);
+  assert.equal(state.perfectCatches, 5);
+  assert.equal(state.retries, 0);
+  assert.ok(state.job.detail.includes('第6件沉重的周一'));
+  assert.ok(state.job.detail.includes('原线再试'));
+  assert.equal(state.catchDetails.length, 5);
+});
+
+test('mixed delivery outcomes expose exact IDs, reasons and independent snapshot copies', () => {
+  const { game } = lastMissFixture(4, { id: 6, type: 'bread', x: 210, time: 38.95 });
+  game._closeDeliveries();
+  let state = game.snapshot();
+  assert.deepEqual(state.job.unavailableItems.map(item => [item.cargoId, item.cargoType, item.order, item.kind]), [[5, 'coffee', 5, 'retryExpired'], [6, 'bread', 6, 'unthrown']]);
+  assert.ok(state.job.unavailableItems[0].reasonText.includes('不再补发'));
+  assert.ok(state.job.unavailableItems[1].reasonText.includes('不再投出'));
+  assert.ok(state.job.detail.includes('第5件续命咖啡'));
+  assert.ok(state.job.detail.includes('第6件老板画的饼'));
+  assert.ok(!state.job.unavailableItems.some(item => item.cargoId <= 4), 'signed cargo is not unavailable');
+  state.job.unavailableItems[0].cargoType = 'fish'; state.job.unavailableItems.length = 0;
+  assert.equal(game.snapshot().job.unavailableItems.length, 2);
+  state = until(game, current => current.recovery?.text.includes('已归位'), 1.2);
+  const before = game.snapshot().recovery;
+  state.recovery.unavailableItems[0].reasonText = 'mutated';
+  assert.deepEqual(game.snapshot().recovery, before);
+});
+
+test('catch audit and delivery facts clear on every reset while normal route previews remain read-only in every mode', () => {
+  const game = new ShiftEngine(); game.reset(); advance(game, 3);
+  game._closeDeliveries();
+  assert.ok(game.snapshot().catchDetails.length);
+  assert.ok(game.snapshot().job.unavailableItems.length);
+  const options = game.snapshot().route.options;
+  assert.deepEqual(options.map(route => [route.variant, route.name]), [[0, '稳稳线'], [1, '折返线'], [2, '轻重线']]);
+  options[0].name = 'mutated'; options.pop();
+  for (const mode of ['daily', 'tutorial', 'normal']) {
+    const state = game.reset(mode, '2026-11-12', { variant: 2 });
+    assert.deepEqual(state.catchDetails, []);
+    assert.deepEqual(state.job.unavailableItems, []);
+    assert.equal(state.job.cutoffSeconds, 39);
+    assert.equal(state.route.options.length, 3);
+    assert.equal(state.route.options[0].name, '稳稳线');
+    assert.equal(state.route.options[2].name, '轻重线');
+    assert.equal(state.catches, 0);
+    assert.equal(state.perfectCatches, 0);
+  }
 });
