@@ -9,11 +9,11 @@
   const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
   const pixelRatio=Math.min(2,window.devicePixelRatio||1);canvas.width=W*pixelRatio;canvas.height=H*pixelRatio;ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);
   let mode='tutorial', muted=true, audio=null, last=performance.now(), visualTime=0, shake=0, flash=0, slowmo=0, messageUntil=0, chaosCooldown=0, pointer=null, isPaused=false, particles=[], texts=[], keys=new Set(), runId=0;
-  let history=[],lastSample=-1,lastAccident=null,replay=null,wreck=null,recoveryNoteUntil=0,lastRecoveryText='',menuOpen=false,activeVariant=0,routeContext=null,lastReportRun=-1,practice=null,runStage=null,runEvidence=emptyEvidence();
+  let history=[],lastSample=-1,lastAccident=null,replay=null,wreck=null,recoveryNoteUntil=0,lastRecoveryText='',menuOpen=false,activeVariant=0,routeContext=null,lastReportRun=-1,practice=null,runStage=null,openBadge=null,runEvidence=emptyEvidence();
   const readStore=(key,fallback={})=>{try{const value=JSON.parse(localStorage.getItem(key)||'null');return value&&typeof value==='object'&&!Array.isArray(value)?value:fallback}catch{return fallback}};
   const routeVariant=value=>((Math.trunc(Number(value)||0)%3)+3)%3;
   const formalKey=key=>/^(normal:[0-2]|daily:\d{4}-\d{2}-\d{2})$/.test(key);
-  let best=readStore('xiaban-best-v8'),recentRuns=readStore('xiaban-last-v8'),achievements=readStore('xiaban-achievements-v7'),sChallenges=readStore('xiaban-s-challenges-v9'),stages=readStore('xiaban-stages-v11'),formalMemory=readStore('xiaban-player-v9',null),routePreference=null;
+  let best=readStore('xiaban-best-v8'),recentRuns=readStore('xiaban-last-v8'),achievements=readStore('xiaban-achievements-v7'),sChallenges=readStore('xiaban-s-challenges-v9'),stages=readStore('xiaban-stages-v11'),progress=readStore('xiaban-progress-v12'),formalMemory=readStore('xiaban-player-v9',null),routePreference=null;
   try{routePreference=localStorage.getItem('xiaban-v5-route');activeVariant=routeVariant(routePreference);muted=localStorage.getItem('xiaban-sound')!=='on'}catch{}
   const gradeFor=s=>s?.won?(s.lives===3&&(s.perfectCatches??s.perfect??0)>=3&&s.assists===0?'S':'A'):null;
   function keepAchievement(key,grade){const old=achievements[key]?.grade;if(!grade||old==='S'||old===grade)return false;achievements[key]={grade,achievedAt:todaySeed()};try{localStorage.setItem('xiaban-achievements-v7',JSON.stringify(achievements))}catch{}return true}
@@ -68,6 +68,61 @@
     }
     if(changed)saveStages();
   }
+  // Read previews without creating records for unplayed lines or tomorrow's daily.
+  function stageView(key){
+    const v=stages[key];return {badges:{s:!!v?.badges?.s,time:!!v?.badges?.time,full:!!v?.badges?.full},targetSeconds:Number.isInteger(v?.targetSeconds)&&v.targetSeconds>=42&&v.targetSeconds<=59?v.targetSeconds:null};
+  }
+  const MILESTONE_NAMES={fourCatches:'签收4件',twoStops:'两站停稳',finish:'安全收工'};
+  const boundedPerfect=n=>Number.isFinite(Number(n))?Math.max(0,Math.min(6,Math.trunc(Number(n)))):0;
+  function saveProgress(){try{localStorage.setItem('xiaban-progress-v12',JSON.stringify(progress))}catch{}}
+  function progressFor(key=recordKey()){
+    if(!progress[key])progress[key]={milestones:{fourCatches:false,twoStops:false,finish:false},bestPerfect:0};
+    const v=progress[key];v.milestones={fourCatches:!!v.milestones?.fourCatches,twoStops:!!v.milestones?.twoStops,finish:!!v.milestones?.finish};v.bestPerfect=boundedPerfect(v.bestPerfect);return v;
+  }
+  function importProgress(){
+    let changed=false;
+    for(const key of new Set([...Object.keys(best),...Object.keys(recentRuns),...Object.keys(stages).filter(key=>stages[key]?.badges?.full===true)])){
+      if(!formalKey(key)||Object.prototype.hasOwnProperty.call(progress,key))continue;
+      const runs=[best[key],recentRuns[key]].filter(Boolean),v=progressFor(key);
+      v.milestones.fourCatches=runs.some(r=>Number.isFinite(r.catches)&&r.catches>=4);
+      v.milestones.twoStops=runs.some(r=>r.stops===2||r.tail?.completed===true);
+      v.milestones.finish=runs.some(r=>r.won===true);
+      v.bestPerfect=Math.max(0,...runs.map(r=>boundedPerfect(r.perfectCatches??r.perfect)));
+      if(stageView(key).badges.full){v.milestones={fourCatches:true,twoStops:true,finish:true};v.bestPerfect=6}
+      changed=true;
+    }
+    if(changed)saveProgress();
+  }
+  function keepRunProgress(s,won){
+    const value=progressFor(),before={...value.milestones},oldPerfect=value.bestPerfect;
+    if(s.catches>=4)value.milestones.fourCatches=true;
+    if(s.tail?.completed||s.stops===2)value.milestones.twoStops=true;
+    if(won)value.milestones.finish=true;
+    value.bestPerfect=Math.max(oldPerfect,boundedPerfect(s.perfectCatches));saveProgress();
+    return {earned:Object.keys(value.milestones).filter(k=>value.milestones[k]&&!before[k]),oldPerfect,bestPerfect:value.bestPerfect,improved:value.bestPerfect>oldPerfect};
+  }
+  function catchFacts(source){
+    const facts=[],seen=new Set(),values=[...(Array.isArray(source?.catchDetails)?source.catchDetails:[]),...(source===snap?[...runEvidence.qualities.values()]:[])];
+    for(const d of values){
+      if(!d||!Number.isInteger(d.cargoId)||d.cargoId<1||d.cargoId>6||!NAMES[d.cargoType]||!['perfect','good'].includes(d.quality)||seen.has(d.cargoId))continue;
+      seen.add(d.cargoId);facts.push({cargoId:d.cargoId,cargoType:d.cargoType,order:Number.isInteger(d.order)&&d.order>=1&&d.order<=6?d.order:null,quality:d.quality,offsetX:Number.isFinite(d.offsetX)?d.offsetX:null,speed:Number.isFinite(d.speed)?d.speed:null,reason:['offset','speed','offset_speed'].includes(d.reason)?d.reason:null,correction:['left','right','brake'].includes(d.correction)?d.correction:null,at:Number.isFinite(d.at)?d.at:Number.isFinite(d.elapsed)?d.elapsed:null,retry:!!d.retry});
+    }
+    return facts;
+  }
+  const parcelName=d=>`${d.order?`第${d.order}件`:''}${NAMES[d.cargoType||d.type]||'货物'}`;
+  function precisionAdvice(d){return d.reason==='speed'?'到位后更早松手，等车慢下来再接':d.reason==='offset_speed'?'提前对准车中心，再松手减速':'提前对准车中心，到位松手等货'}
+  function precisionProblem(d){return d.reason==='speed'?'签收时车速太快':d.reason==='offset_speed'?'偏离车中心且车速太快':Number.isFinite(d.offsetX)&&Math.abs(d.offsetX)>24?`落在车${d.offsetX>0?'右':'左'}侧，偏离中心`:'这件未精准签收'}
+  function precisionFocus(source){
+    if(stageKind(stageView(recordKey()))!=='full')return null;
+    const d=catchFacts(source).find(d=>d.quality==='good');
+    return d?{kind:'precisionCargo',cargoId:d.cargoId,type:d.cargoType,order:d.order,reason:d.reason,correction:d.correction,offsetX:d.offsetX,speed:d.speed,at:d.at}:null;
+  }
+  function unavailableFacts(source){
+    const sourceItems=source?.job?.unavailableItems??source?.deliveryOutcomes??[],seen=new Set(),items=[];
+    if(!Array.isArray(sourceItems))return items;
+    for(const d of sourceItems){if(!d||!Number.isInteger(d.cargoId)||d.cargoId<1||d.cargoId>6||!NAMES[d.cargoType]||!['unthrown','retryExpired'].includes(d.kind)||seen.has(d.cargoId))continue;seen.add(d.cargoId);items.push({cargoId:d.cargoId,cargoType:d.cargoType,order:Number.isInteger(d.order)&&d.order>0&&d.order<=6?d.order:null,kind:d.kind,reasonText:typeof d.reasonText==='string'?d.reasonText.slice(0,180):''})}
+    return items;
+  }
   function keepRunStages(s,won,elite){
     const value=stageFor(),before={...value.badges};
     if(elite){
@@ -83,7 +138,7 @@
     const kind=stageKind(value);
     return kind==='s'?'下一章：保持S，精准至少3件、无翻车无扶正，安全收工。':kind==='time'?(value.targetSeconds===null?'下一章：再获S记录用时，确定一次固定限时。':`下一章：限时章，保持S且≤${value.targetSeconds}秒安全收工。`):kind==='full'?'下一章：全单精准章，6件全部精准并保持S收工。':'本线三章毕业！可自由再跑，或换下一条线收章。';
   }
-  function emptyEvidence(){return {spawned:new Map(),caught:new Set(),retried:new Set(),retryCaught:new Set(),restored:new Set(),assisted:new Set(),crashes:[],stations:new Set(),arrival:false}}
+  function emptyEvidence(){return {spawned:new Map(),caught:new Set(),qualities:new Map(),retried:new Set(),retryCaught:new Set(),restored:new Set(),assisted:new Set(),crashes:[],stations:new Set(),arrival:false}}
   function recordEvidence(e){
     if(e.type==='spawn')runEvidence.spawned.set(e.cargoId,e.cargoType);
     if(e.type==='tail'){
@@ -96,9 +151,10 @@
     if(e.type==='catch'){
       if(runEvidence.retried.has(e.cargoId)||runEvidence.crashes.some(c=>c.cargoId===e.cargoId&&c.cause==='漏接'))runEvidence.retryCaught.add(e.cargoId);
       runEvidence.caught.add(e.cargoId);
+      if(['perfect','good'].includes(e.quality)&&!runEvidence.qualities.has(e.cargoId))runEvidence.qualities.set(e.cargoId,{...e,at:e.at??e.elapsed});
     }
     if(e.type==='crash')runEvidence.crashes.push({...e,at:e.at??e.elapsed,caughtBefore:runEvidence.caught.has(e.cargoId)||!!e.cause&&e.cause!=='漏接'});
-    if(practice?.kind==='cargo'&&['catch','crash'].includes(e.type)&&(practice.cargoId!==null?e.cargoId===practice.cargoId:practice.type!=='bread'&&e.cargoType===practice.type))practice.noticeAt=e.elapsed;
+    if(['cargo','precisionCargo'].includes(practice?.kind)&&['catch','crash'].includes(e.type)&&(practice.cargoId!==null?e.cargoId===practice.cargoId:practice.type!=='bread'&&e.cargoType===practice.type))practice.noticeAt=e.elapsed;
     if(e.type==='recovery'&&(e.phase==='restored'||e.phase==='assist'||e.assist)){
       const ids=engine.snapshot().cargo.filter(c=>c.caught).map(c=>c.id);
       for(const id of ids){runEvidence.restored.add(id);if(e.phase==='assist'||e.assist)runEvidence.assisted.add(id)}
@@ -133,6 +189,7 @@
   // Only known S runs on the unchanged V8 routes can seed a time challenge.
   for(const records of [best,recentRuns])for(const [key,run]of Object.entries(records))if(gradeFor(run)==='S')keepSChallenge(key,run.time);
   importStages();
+  importProgress();
   restoreEntry();
   const engine = new ShiftEngine(onEvent);
   let snap=engine.snapshot();
@@ -172,8 +229,9 @@
     if(source?.finishReason==='unsafe_arrival')return {kind:'arrival'};
     const won=source?.won??source?.status==='win';
     if(won&&source.assists>0)return {kind:'stability'};
-    const a=source?.lastCrash;if(!a||!NAMES[a.cargoType])return won&&(source.perfectCatches??source.perfect??0)<3?{kind:'precision'}:null;
-    return {kind:'cargo',cargoId:Number.isInteger(a.cargoId)&&a.cargoId>0?a.cargoId:null,type:a.cargoType,cause:a.cause,side:a.side,at:Number.isFinite(a.at)?a.at:Number.isFinite(a.elapsed)?a.elapsed:null};
+    const a=source?.lastCrash;
+    if(a&&NAMES[a.cargoType])return {kind:'cargo',cargoId:Number.isInteger(a.cargoId)&&a.cargoId>0?a.cargoId:null,type:a.cargoType,cause:a.cause,side:a.side,at:Number.isFinite(a.at)?a.at:Number.isFinite(a.elapsed)?a.elapsed:null};
+    return precisionFocus(source)||(won&&(source.perfectCatches??source.perfect??0)<3?{kind:'precision'}:null);
   }
   function practiceLabel(p=practice){
     if(!p)return '';
@@ -181,12 +239,23 @@
     if(p.kind==='arrival')return '本趟重点 · 上趟最后靠站未稳';
     if(p.kind==='stability')return '本趟重点 · 上趟发生扶正，留意旧货状态';
     if(p.kind==='precision')return '本趟重点 · 上趟精准不足3件，留意车中心';
+    if(p.kind==='precisionCargo')return `本趟重点 · ${parcelName(p)}上趟${precisionProblem(p)}；${precisionAdvice(p)}。`;
     return `本趟重点 · ${NAMES[p.type]}${p.cause==='漏接'?'上趟漏接，留意落点':p.side==='left'?'上趟从左侧滑落，留意重心':p.side==='right'?'上趟从右侧滑落，留意重心':'上趟掉落，留意支撑'}`;
   }
   function practiceMatches(p,item){return p.cargoId!==null?item.id===p.cargoId:item.type===p.type}
   function practiceStatus(s,final=false){
     if(!practice)return null;
     const p=practice,won=s.status==='win',ended=final||s.status==='win'||s.status==='lose';
+    if(p.kind==='precisionCargo'){
+      const name=parcelName(p),fact=catchFacts(s).find(d=>d.cargoId===p.cargoId),crashed=runEvidence.crashes.find(d=>d.cargoId===p.cargoId&&d.cause==='漏接')||(s.lastCrash?.cargoId===p.cargoId&&s.lastCrash.cause==='漏接'?s.lastCrash:null);
+      if(fact){
+        if(fact.quality==='perfect'){if(p.achievedAt===undefined)p.achievedAt=s.elapsed;return {state:'achieved',text:`${name}${fact.retry?'补发后':'这次'}已精准签收${fact.retry?'，首次投递仍未签收':''}${ended?'，接货单项达标；整趟结果另看报告':'，继续保货'}。`}}
+        return {state:'failed',text:`${name}这次仍未精准：${precisionProblem(fact)}；${precisionAdvice(fact)}。`};
+      }
+      if(crashed)return {state:'failed',text:`${name}本次漏接，先练接住，再练车中心。`};
+      if(ended){const attempted=runEvidence.spawned.has(p.cargoId)||s.cargo.some(c=>c.id===p.cargoId);return {state:'neutral',text:attempted?`${name}已投出，尚未完成精准练习；先看本次失误。`:`本趟尚未练到${name}，这项留待下趟。`}}
+      return {state:'waiting',text:practiceLabel(p)};
+    }
     if(p.kind==='precision'){
       const n=s.perfectCatches||0;
       if(n>=3&&p.achievedAt===undefined)p.achievedAt=s.elapsed;
@@ -230,13 +299,15 @@
     return {state:'waiting',text:practiceLabel(p)};
   }
   function practiceState(s,playing,teaching){
-    if(!practice||!playing||teaching)return null;
+    if(!playing||teaching)return null;
+    if(!practice)return fullRunHint(s);
     const p=practice,start=s.elapsed<=4,g=s.guidance,falling=s.cargo.filter(b=>!b.caught),next=s.nextDrop;
     let relevant=false,suppressed=false;
     if(p.kind==='station')relevant=!!s.tail?.active&&!s.tail.completed&&s.tail.step===p.step;
     else if(p.kind==='arrival')relevant=!!s.settling||!!s.tail?.completed;
     else if(p.kind==='stability')relevant=g?.kind==='rescue'||!!s.recovery?.assist;
     else if(p.kind==='precision')relevant=['pickup','brake'].includes(g?.kind)&&!!(next||falling.length);
+    else if(p.kind==='precisionCargo'){suppressed=['rescue','recovery'].includes(g?.kind);relevant=!suppressed&&['pickup','brake'].includes(g?.kind)&&(g?.cargoId===p.cargoId||next?.cargoId===p.cargoId||falling.some(b=>b.id===p.cargoId))}
     else{
       const id=g?.cargoId??(['pickup','brake'].includes(g?.kind)?next?.cargoId:null)??falling.at(-1)?.id;
       const type=s.cargo.find(b=>b.id===id)?.type||(next&&next.cargoId===id?next.type:null);
@@ -250,11 +321,16 @@
       }
     }
     const status=practiceStatus(s);
-    if(p.kind==='precision'&&status.state==='achieved')relevant=false;
+    if(['precision','precisionCargo'].includes(p.kind)&&status.state==='achieved')relevant=false;
     if(p.kind==='station'&&status.state==='achieved')relevant=false;
-    const acknowledged=(p.kind==='precision'||p.kind==='station')&&status.state==='achieved'&&s.elapsed-p.achievedAt<=2.5&&!['rescue','recovery'].includes(g?.kind);
+    const acknowledged=(['precision','precisionCargo','station'].includes(p.kind))&&status.state==='achieved'&&s.elapsed-p.achievedAt<=2.5&&!['rescue','recovery'].includes(g?.kind);
     const notice=Number.isFinite(p.noticeAt)&&s.elapsed>=p.noticeAt&&s.elapsed-p.noticeAt<=2.5&&!suppressed;
-    return start||relevant||acknowledged||notice?{...status,relevant:status.state==='achieved'?false:relevant}:null;
+    return start||relevant||acknowledged||notice?{...status,relevant:status.state==='achieved'?false:relevant}:fullRunHint(s);
+  }
+  function fullRunHint(s){
+    if(runStage?.kind!=='full'||s.catches<=(s.perfectCatches||0)||['rescue','recovery'].includes(s.guidance?.kind)||s.settling)return null;
+    const n=boundedPerfect(s.perfectCatches),b=progressFor().bestPerfect,bad=Math.max(0,(s.catches||0)-n,catchFacts(s).filter(d=>d.quality==='good').length);
+    return {state:'progress',relevant:false,text:`本趟精准${n}/6 · 本线最佳${b}/6；${6-bad>b?'继续练余货，争单项新纪录':'继续练余货，结算定位下趟重点'}。`};
   }
   function nextGoal(won=false,s=snap){
     const required=s.requiredCatches||4,a=s.lastCrash,name=NAMES[a?.cargoType]||'货物';
@@ -275,6 +351,7 @@
       return '原线重来，重点保住三次机会，全程不翻车。';
     }
     if((s.perfectCatches||0)<3)return '原线重来，重点练中心接货，精准至少3件。';
+    const precise=precisionFocus(s);if(precise)return `原线重来，重点练${parcelName(precise)}：${precisionProblem(precise)}；${precisionAdvice(precise)}。`;
     return stageGoal();
   }
   function compareRuns(previous,current){
@@ -305,7 +382,45 @@
     if(progressKept&&c.score>p.score)return up(`同一条线，比上一趟多了${c.score-p.score}分。`);
     return baseline;
   }
-  function syncRoutePreview(){const next=mode==='normal'?snap.route?.next:null;$('routeNextHint').classList.toggle('hidden',!next);if(next){put('routeNextHint',`下条：${next.name} · ${next.tagline}`);put('resultNewRoute',`换到${next.name} ↗`);$('resultNewRoute').setAttribute('aria-label',`换到${next.name}`);$('resultNewRoute').dataset.variant=String(next.variant)}else put('routeNextHint','')}
+  function routeChoices(){
+    const defaults=[{variant:0,name:'稳稳线',tagline:'轻挪接货，先把基础练稳'},{variant:1,name:'折返线',tagline:'左右换向，练会反手接货'},{variant:2,name:'轻重线',tagline:'轻货先到，后半程再接重货'}];
+    return defaults.map(d=>(snap.route?.options||[]).find(r=>r.variant===d.variant)||((snap.route?.next?.variant===d.variant)?snap.route.next:null)||(mode==='normal'&&activeVariant===d.variant?snap.route:null)||d);
+  }
+  function graduationNext(){
+    if(mode==='tutorial'||stageCount(stageView(recordKey()))<3)return null;
+    const choices=routeChoices();
+    for(let offset=1;offset<=3;offset++){
+      const variant=(activeVariant+offset)%3,key=`normal:${variant}`,value=stageView(key);
+      if(stageCount(value)<3)return {mode:'normal',variant,key,name:choices.find(r=>r.variant===variant)?.name||`收工线${variant+1}`,value};
+    }
+    const key=`daily:${todaySeed()}`,value=stageView(key);
+    return stageCount(value)<3?{mode:'daily',variant:activeVariant,key,name:'今日同题',value}:null;
+  }
+  function shortStage(value){const kind=stageKind(value);return kind==='s'?'下一章S':kind==='time'?(value.targetSeconds===null?'下一章记录S用时':`限时≤${value.targetSeconds}秒且S`):kind==='full'?'下一章全准6/6且S':'已毕业'}
+  function syncRoutePreview(){
+    const graduated=mode!=='tutorial'&&stageCount(stageView(recordKey()))===3,recommended=graduated?graduationNext():null,cyclic=mode==='normal'?snap.route?.next:null,next=recommended||cyclic;
+    $('resultDock').dataset.graduated=String(graduated);$('graduateNextBtn').classList.toggle('hidden',!recommended||!['win','lose'].includes(snap.status));
+    if(recommended){put('graduateNextBtn',recommended.mode==='daily'?'挑战今日同题 →':`去${recommended.name}收章 →`);$('graduateNextBtn').dataset.mode=recommended.mode;$('graduateNextBtn').dataset.variant=String(recommended.variant);$('graduateNextBtn').dataset.key=recommended.key;$('graduateNextBtn').setAttribute('aria-label',`去${recommended.name}，已集${stageCount(recommended.value)}/3章，${shortStage(recommended.value)}`)}
+    else{put('graduateNextBtn','');$('graduateNextBtn').dataset.mode='';$('graduateNextBtn').dataset.key=''}
+    $('routeNextHint').classList.toggle('hidden',mode==='tutorial'||!next);
+    if(next){const value=recommended?.value||stageView(`normal:${next.variant}`);put('routeNextHint',`${recommended?'推荐':'下条'}：${next.name} · ${stageCount(value)}/3章 · ${shortStage(value)}${!recommended&&next.tagline?` · ${next.tagline}`:''}`)}else put('routeNextHint',graduated?'三条普通线与今日题均已毕业，可自由跑。':'');
+    if(cyclic){put('resultNewRoute',`换到${cyclic.name} ↗`);$('resultNewRoute').setAttribute('aria-label',`换到${cyclic.name}`);$('resultNewRoute').dataset.variant=String(cyclic.variant)}
+    if(graduated)put('restartBtn',mode==='daily'?'同题自由跑 ↻':'原线自由跑 ↻');
+  }
+  function syncMilestones(){
+    $('milestoneProgress').classList.toggle('hidden',mode==='tutorial');if(mode==='tutorial')return;
+    const v=progressFor(),count=Object.values(v.milestones).filter(Boolean).length,next=Object.keys(MILESTONE_NAMES).find(k=>!v.milestones[k]);
+    put('milestoneProgress',`小目标${count}/3${next?` · 下个：${MILESTONE_NAMES[next]}`:' · 已完成'} · 最佳精准${v.bestPerfect}/6`);$('milestoneProgress').dataset.count=String(count);
+  }
+  function badgeInfo(kind){
+    const v=stageFor();return kind==='s'?'S章：无翻车、无扶正，精准至少3件并安全收工。':kind==='time'?(v.targetSeconds===null?'限时章：首次可信S记录用时后，固定一次目标；从下一趟开始。':`限时章：保持S且≤${v.targetSeconds}秒安全收工；达成后不再减秒。`):'全单精准章：6件真实签收、6件全部精准，并保持S安全收工。';
+  }
+  function toggleBadge(kind){
+    openBadge=openBadge===kind?null:kind;
+    $('badgeInfo').classList.toggle('hidden',!openBadge);if(openBadge)put('badgeInfo',badgeInfo(openBadge));
+    for(const [k,id]of Object.entries({s:'badgeS',time:'badgeTime',full:'badgeFull'}))$(id).setAttribute('aria-expanded',String(k===openBadge));
+  }
+
   function syncChallengeLabel(){
     const c=challengeFor(),hasS=achievements[recordKey()]?.grade==='S';
     $('challengeRecord').classList.toggle('hidden',mode==='tutorial'||(!c&&!hasS));
@@ -314,14 +429,15 @@
     put('challengeRecord',c?`S最快${(c.bestTimeCs/100).toFixed(2)}秒 · ${value.badges.time?'限时章已获得':value.targetSeconds===null?'再获S后确定限时':`限时章≤${value.targetSeconds}秒且保持S`}`:hasS?'S成就已保留 · 再获S后记录用时':'');
   }
   function syncStages(){
-    const teaching=mode==='tutorial';$('routeStages').classList.toggle('hidden',teaching);if(teaching)return;
+    const teaching=mode==='tutorial';$('routeStages').classList.toggle('hidden',teaching);$('badgeInfo').classList.toggle('hidden',teaching||!openBadge);if(teaching)return;
+    if(openBadge)put('badgeInfo',badgeInfo(openBadge));
     const value=stageFor();
     for(const [kind,id]of Object.entries({s:'badgeS',time:'badgeTime',full:'badgeFull'})){
       const earned=value.badges[kind];put(id,`${earned?'✓':'○'} ${kind==='full'?'全准章':STAGE_NAMES[kind]}`);$(id).dataset.earned=String(earned);
     }
     const count=stageCount(value);put('stageCount',`${count}/3${count===3?' · 毕业':''}`);$('routeStages').dataset.state=count===3?'complete':'progress';$('routeStages').setAttribute('aria-label',`本线已集${count}/3章。S章：无翻车无扶正、精准至少3件安全收工。限时章：${value.targetSeconds===null?'再获S后确定一次固定限时':`保持S且${value.targetSeconds}秒内收工`}。全单精准章：6件全部精准且保持S。${stageGoal(value)}`);
   }
-  function bestLabel(){syncRoutePreview();syncChallengeLabel();syncStages();const teaching=mode==='tutorial';$('routeBrief').classList.toggle('hidden',teaching);$('gradeRecord').classList.toggle('hidden',teaching||!achievements[recordKey()]);if(teaching){$('bestRecord').textContent='三步练习，不限时、不扣机会';put('nextChallengeHint','先学会挪车、松手刹车，再试救货。');return}const b=best[recordKey()],latest=recentRuns[recordKey()],grade=achievements[recordKey()]?.grade;put('routeBrief',`${snap.route?.name||routeName()} · ${snap.route?.tagline||'原线再试，货物与路况不变。'}`);put('gradeRecord',grade?`✦ 本线最高${grade}级 · 成就已保留`:'');$('gradeRecord').dataset.grade=grade||'';$('bestRecord').textContent=b?`${routeName()} · ${b.score}分 · ${b.won?`${b.time}秒收工`:`用时${b.time}秒`}`:`${routeName()} · 等你出发`;put('nextChallengeHint',stageKind(stageFor())==='complete'?stageGoal():latest?nextGoal(latest.won,latest):b?.won?nextGoal(true,{...b,perfectCatches:b.perfect}):stageGoal())}
+  function bestLabel(){syncRoutePreview();syncChallengeLabel();syncStages();syncMilestones();const teaching=mode==='tutorial';$('routeBrief').classList.toggle('hidden',teaching);$('gradeRecord').classList.toggle('hidden',teaching||!achievements[recordKey()]);if(teaching){$('bestRecord').textContent='三步练习，不限时、不扣机会';put('nextChallengeHint','先学会挪车、松手刹车，再试救货。');return}const b=best[recordKey()],latest=recentRuns[recordKey()],grade=achievements[recordKey()]?.grade;put('routeBrief',`${snap.route?.name||routeName()} · ${snap.route?.tagline||'原线再试，货物与路况不变。'}`);put('gradeRecord',grade?`✦ 本线最高${grade}级 · 成就已保留`:'');$('gradeRecord').dataset.grade=grade||'';$('bestRecord').textContent=b?`${routeName()} · ${b.score}分 · ${b.won?`${b.time}秒收工`:`用时${b.time}秒`}`:`${routeName()} · 等你出发`;put('nextChallengeHint',stageKind(stageFor())==='complete'?stageGoal():latest?nextGoal(latest.won,latest):b?.won?nextGoal(true,{...b,perfectCatches:b.perfect}):stageGoal())}
   function refreshMode(){if(snap.status==='ready'){engine.reset(mode,undefined,{variant:activeVariant});engine.status='ready';snap=engine.snapshot()}document.querySelectorAll('[data-mode]').forEach(b=>{b.classList.toggle('active',b.dataset.mode===mode);b.setAttribute('aria-pressed',String(b.dataset.mode===mode))});const teaching=mode==='tutorial';$('startBtn').textContent=teaching?'三步学会稳车 →':'拉上小车，走！ ↗';$('startCopy').innerHTML=teaching?'先学接货、松手刹车，再试救货。<br>三步练习不限时，失误不扣机会。':'至少签收4件，投递结束后停稳两站。<br>达标后仍有新货，进度会告诉你还差什么。';$('skipTutorial').classList.toggle('hidden',!teaching);$('routeLabel').textContent=teaching?'新手三步':routeName();bestLabel()}
   function copyFrame(s){return{status:'playing',elapsed:s.elapsed,truck:{...s.truck},cargo:s.cargo.map(b=>({...b})),wind:s.wind,balance:s.balance?{...s.balance}:null,tail:s.tail?{...s.tail}:null}}
   function recordFrame(){if(snap.elapsed-lastSample<.045||isPaused)return;lastSample=snap.elapsed;history.push(copyFrame(snap));history=history.filter(f=>f.elapsed>=snap.elapsed-2.8)}
@@ -333,18 +449,19 @@
     const same=options.retry&&routeContext?.mode===nextMode;
     mode=nextMode;
     if(mode==='normal'){
-      if(options.newRoute)activeVariant=(activeVariant+1)%3;
+      if(Number.isInteger(options.variant)&&options.variant>=0&&options.variant<3)activeVariant=options.variant;
+      else if(options.newRoute)activeVariant=(activeVariant+1)%3;
       else if(same)activeVariant=routeContext.variant;
       try{localStorage.setItem('xiaban-v5-route',String(activeVariant))}catch{}
     }
     const dateSeed=mode==='daily'&&same?routeContext.dateSeed:undefined;
-    const practiceSource=same&&engine.snapshot().lastCrash?engine.snapshot():null;
-    runId++;lastReportRun=-1;menuOpen=false;replay=null;history=[];lastSample=-1;lastAccident=null;wreck=null;lastRecoveryText='';recoveryNoteUntil=0;runEvidence=emptyEvidence();practice=null;runStage=null;engine.reset(mode,dateSeed,{variant:activeVariant});snap=engine.snapshot();routeContext={mode,variant:snap.tail?.variant??activeVariant,dateSeed:snap.dateSeed};practice=mode==='tutorial'||options.newRoute?null:practiceFrom(practiceSource||recentRuns[recordKey()]);const chapter=mode==='tutorial'?null:stageFor();runStage=chapter?{key:recordKey(),kind:stageKind(chapter),badges:{...chapter.badges},targetSeconds:chapter.targetSeconds}:null;rememberFormal();isPaused=false;pointer=null;keys.clear();particles=[];texts=[];shake=0;flash=0;slowmo=0;chaosCooldown=0;messageUntil=0;$('gameMessage').classList.remove('show');$('gameMessage').textContent='';canvas.setAttribute('aria-label',mode==='tutorial'?'新手三步：方向键或拖动挪车，松手刹车，再练接回弹起的饼。不限时，失误不扣机会。':'至少签收4件，投递结束后在尾段两站松手停稳。方向键按住轻挪，到位松手；原线重试保留本趟路线。');
+    const previousSnap=engine.snapshot(),practiceSource=same&&(previousSnap.lastCrash||catchFacts(previousSnap).some(d=>d.quality==='good'))?previousSnap:null;
+    runId++;lastReportRun=-1;openBadge=null;menuOpen=false;replay=null;history=[];lastSample=-1;lastAccident=null;wreck=null;lastRecoveryText='';recoveryNoteUntil=0;runEvidence=emptyEvidence();practice=null;runStage=null;engine.reset(mode,dateSeed,{variant:activeVariant});snap=engine.snapshot();routeContext={mode,variant:snap.tail?.variant??activeVariant,dateSeed:snap.dateSeed};practice=mode==='tutorial'||options.newRoute?null:practiceFrom(practiceSource||recentRuns[recordKey()]);const chapter=mode==='tutorial'?null:stageFor();runStage=chapter?{key:recordKey(),kind:stageKind(chapter),badges:{...chapter.badges},targetSeconds:chapter.targetSeconds}:null;rememberFormal();isPaused=false;pointer=null;keys.clear();particles=[];texts=[];shake=0;flash=0;slowmo=0;chaosCooldown=0;messageUntil=0;$('gameMessage').classList.remove('show');$('gameMessage').textContent='';canvas.setAttribute('aria-label',mode==='tutorial'?'新手三步：方向键或拖动挪车，松手刹车，再练接回弹起的饼。不限时，失误不扣机会。':'至少签收4件，投递结束后在尾段两站松手停稳。方向键按住轻挪，到位松手；原线重试保留本趟路线。');
     document.body.classList.remove('result-mode');$('resultOverlay').inert=false;$('resultStats').open=false;$('resultScroll').scrollTop=0;
-    ['startOverlay','pauseOverlay','resultOverlay','resultChallenge','resultPractice','stageReward','replayBanner','balancePanel','dropBadge','recoveryNote','parkingBadge','settleBanner','tailPanel','jobPanel','practiceHint'].forEach(id=>$(id).classList.add('hidden'));$('gameWindow').classList.remove('replaying','tail-mode');$('gameWindow').classList.toggle('tutorial-mode',mode==='tutorial');document.body.classList.add('playing');if(matchMedia('(max-width:760px)').matches)setFocus(true);$('hud').classList.remove('hidden');$('touchGuide').classList.add('hidden');$('warning').classList.add('hidden');$('chaosBtn').disabled=mode==='tutorial';$('pauseBtn').textContent='☰';refreshMode();$('commentary').textContent=mode==='tutorial'?'三步练习不扣机会，随时可以从菜单跳过。':'至少签收4件，等整单投完，再到两站松手停稳。';sound('start');canvas.focus({preventScroll:true});if(matchMedia('(max-width:760px)').matches)requestAnimationFrame(()=>document.querySelector('.arcade').scrollIntoView({block:'start',behavior:'auto'}));
+    ['startOverlay','pauseOverlay','resultOverlay','resultChallenge','resultPractice','resultDelivery','resultMilestone','stageReward','graduateNextBtn','badgeInfo','replayBanner','balancePanel','dropBadge','recoveryNote','parkingBadge','settleBanner','tailPanel','jobPanel','practiceHint'].forEach(id=>$(id).classList.add('hidden'));$('gameWindow').classList.remove('replaying','tail-mode');$('gameWindow').classList.toggle('tutorial-mode',mode==='tutorial');document.body.classList.add('playing');if(matchMedia('(max-width:760px)').matches)setFocus(true);$('hud').classList.remove('hidden');$('touchGuide').classList.add('hidden');$('warning').classList.add('hidden');$('chaosBtn').disabled=mode==='tutorial';$('pauseBtn').textContent='☰';refreshMode();$('commentary').textContent=mode==='tutorial'?'三步练习不扣机会，随时可以从菜单跳过。':'至少签收4件，等整单投完，再到两站松手停稳。';sound('start');canvas.focus({preventScroll:true});if(matchMedia('(max-width:760px)').matches)requestAnimationFrame(()=>document.querySelector('.arcade').scrollIntoView({block:'start',behavior:'auto'}));
   }
   function retryRun(){start(mode,{retry:true})}
-  function showReport(){document.body.classList.add('result-mode');$('resultOverlay').classList.remove('hidden');$('resultScroll').scrollTop=0;$('chaosBtn').disabled=true;requestAnimationFrame(()=>{if(!document.body.classList.contains('result-mode')||menuOpen)return;if(matchMedia('(max-width:760px)').matches)document.querySelector('.arcade').scrollIntoView({block:'start',behavior:'auto'});$('restartBtn').focus({preventScroll:true})})}
+  function showReport(){document.body.classList.add('result-mode');$('resultOverlay').classList.remove('hidden');$('resultScroll').scrollTop=0;$('chaosBtn').disabled=true;requestAnimationFrame(()=>{if(!document.body.classList.contains('result-mode')||menuOpen)return;if(matchMedia('(max-width:760px)').matches)document.querySelector('.arcade').scrollIntoView({block:'start',behavior:'auto'});($('graduateNextBtn').classList.contains('hidden')?$('restartBtn'):$('graduateNextBtn')).focus({preventScroll:true})})}
   function rewardStages(reward){
     if(!reward.earned.length)return;
     const value=stageFor(),count=stageCount(value),names=reward.earned.map(kind=>STAGE_NAMES[kind]).join('、');
@@ -353,24 +470,44 @@
     sound(reward.graduated?'graduate':'badge');
     if(!reducedMotion)for(let i=0;i<(reward.graduated?4:2);i++)burst(115+i*(reward.graduated?65:190),250-i%2*35,['#f7ef59','#a7c6a5','#a397d2'][i%3],reward.graduated?20:14);
   }
+  function rewardProgress(reward,chapters){
+    if(chapters.earned.length)return;
+    const count=Object.values(progressFor().milestones).filter(Boolean).length;
+    if(reward.earned.length){
+      put('resultMilestone',`小目标达成：${reward.earned.map(k=>MILESTONE_NAMES[k]).join('、')} · 本线${count}/3`);$('resultMilestone').dataset.kind='milestone';sound('catch');
+    }else if(runStage?.kind==='full'&&reward.improved){
+      put('resultMilestone',`单项进步：本线最佳精准${reward.oldPerfect}→${reward.bestPerfect}/6；整趟结果另看报告。`);$('resultMilestone').dataset.kind='personal-best';
+    }else return;
+    $('resultMilestone').dataset.state='achieved';$('resultMilestone').classList.remove('hidden');
+  }
+  function deliveryReport(s){
+    const items=unavailableFacts(s),unthrown=items.filter(d=>d.kind==='unthrown'),expired=items.filter(d=>d.kind==='retryExpired'),u=items.length?unthrown.length:s.job?.unthrownCount||0,r=items.length?expired.length:s.job?.retryExpiredCount||0;
+    $('resultDelivery').classList.toggle('hidden',!u&&!r);if(!u&&!r)return;
+    const labels=items.length?items.map(d=>`${parcelName(d)}${d.kind==='unthrown'?'原单未投出':'已投出未签收，补发过期'}`).join('；'):[u?`${u}件原单未投出`:'',r?`${r}件已投出未签收，补发过期`:''].filter(Boolean).join('；');
+    const cutoff=Number.isFinite(s.job?.cutoffSeconds)?s.job.cutoffSeconds:39,reasons=[...new Set(items.map(d=>d.reasonText).filter(Boolean))];
+    let reason=u&&r?`原单和补发都需在${cutoff}秒前留够接货预告；本趟窗口不足，这些货不再投出或补发。`:reasons.length?reasons.join(' '):`投递需在${cutoff}秒前留够接货预告，本趟窗口不足。`;
+    if(!/不再/.test(reason))reason+=`本趟不再${u?'投出这些原单':'补发这些未签收货'}。`;
+    put('resultDelivery',`${labels}。\n${reason}\n下趟按预告接货，及时稳住旧货，给后续留出投递时间。`);
+    $('resultDelivery').dataset.state='unavailable';$('resultDelivery').dataset.unthrown=String(u);$('resultDelivery').dataset.retryExpired=String(r);
+  }
   function finish(won){
-    if(engine.snapshot().status==='playing')return;snap=engine.snapshot();if(lastReportRun===runId){showReport();return}const teaching=mode==='tutorial';$('resultOverlay').dataset.grade='';$('resultOverlay').querySelector('.result-score').classList.toggle('hidden',teaching);$('resultStats').classList.toggle('hidden',teaching);$('resultSummary').classList.toggle('hidden',teaching);['resultAchievement','resultChallenge','resultPractice','stageReward'].forEach(id=>$(id).classList.add('hidden'));$('resultNewRoute').classList.toggle('hidden',mode!=='normal');$('resultStats').open=false;$('resultDelta').classList.add('hidden');put('resultDelta','');
-    if(teaching){lastReportRun=runId;if(won){try{localStorage.setItem('xiaban-tutorial-v3','done')}catch{}}put('resultKicker','三步练习 · 已学会');put('resultTitle','会接、会停、会救。');put('resultText','正式路线要签收4件、停稳两站。到站反馈会告诉你还差哪一步。');put('restartBtn','开始正式下班 →');put('recordHint','随时点菜单重练，失误也不扣机会。');put('nextRunHint','先接齐货，再到两站亮区松手停稳。');showReport();['replayBtn','warning','touchGuide','balancePanel','actionGuide','tutorialPill','dropBadge','recoveryNote','parkingBadge','settleBanner','tailPanel','jobPanel','practiceHint'].forEach(id=>$(id).classList.add('hidden'));return}
+    if(engine.snapshot().status==='playing')return;snap=engine.snapshot();if(lastReportRun===runId){showReport();return}const teaching=mode==='tutorial';$('resultOverlay').dataset.grade='';$('resultOverlay').querySelector('.result-score').classList.toggle('hidden',teaching);$('resultStats').classList.toggle('hidden',teaching);$('resultSummary').classList.toggle('hidden',teaching);['resultAchievement','resultChallenge','resultPractice','resultDelivery','resultMilestone','stageReward','graduateNextBtn'].forEach(id=>$(id).classList.add('hidden'));$('resultNewRoute').classList.toggle('hidden',mode!=='normal');$('resultStats').open=false;$('resultDelta').classList.add('hidden');put('resultDelta','');
+    if(teaching){$('resultDock').dataset.graduated='false';lastReportRun=runId;if(won){try{localStorage.setItem('xiaban-tutorial-v3','done')}catch{}}put('resultKicker','三步练习 · 已学会');put('resultTitle','会接、会停、会救。');put('resultText','正式路线要签收4件、停稳两站。到站反馈会告诉你还差哪一步。');put('restartBtn','开始正式下班 →');put('recordHint','随时点菜单重练，失误也不扣机会。');put('nextRunHint','先接齐货，再到两站亮区松手停稳。');showReport();['replayBtn','warning','touchGuide','balancePanel','actionGuide','tutorialPill','dropBadge','recoveryNote','parkingBadge','settleBanner','tailPanel','jobPanel','practiceHint'].forEach(id=>$(id).classList.add('hidden'));return}
     const score=Math.floor(snap.score),key=recordKey(),old=best[key]?.score??-1,isNew=score>old;
     if(isNew){best[key]={score,won,time:Math.round(snap.elapsed*100)/100,perfect:snap.perfectCatches||0,lives:snap.lives,assists:snap.assists||0};try{localStorage.setItem('xiaban-best-v8',JSON.stringify(best))}catch{}}
     const perfect=snap.perfectCatches||0,accident=snap.lastCrash,incomplete=snap.finishReason==='incomplete',tailFailed=snap.finishReason==='tail_incomplete',unsafe=snap.finishReason==='unsafe_arrival',required=snap.requiredCatches||4,tail=snap.tail,stops=tail?.completed?2:Math.max(0,(tail?.step||1)-1),elite=won&&snap.lives===3&&perfect>=3&&!(snap.assists>0);
     const challengeVerdict=challengeResult(snap,won,elite),practiceVerdict=practiceStatus(snap,true);
-    const stageReward=keepRunStages(snap,won,elite);
+    const stageReward=keepRunStages(snap,won,elite),progressReward=keepRunProgress(snap,won);
     if(elite)keepSChallenge(key,snap.elapsed);
     if(challengeVerdict){put('resultChallenge',challengeVerdict.text);$('resultChallenge').dataset.state=challengeVerdict.state;$('resultChallenge').classList.remove('hidden')}
     if(practiceVerdict){put('resultPractice',practiceVerdict.text);$('resultPractice').dataset.state=practiceVerdict.state;$('resultPractice').classList.remove('hidden')}
     const earned=keepAchievement(key,won?(elite?'S':'A'):null),grade=achievements[key]?.grade;put('resultAchievement',elite&&earned?'✦ 首次S级！成就已保留':grade?`✦ 本线最高${grade}级 · 成就已保留`:'');$('resultAchievement').classList.toggle('hidden',!grade);$('resultAchievement').dataset.grade=grade||'';
     $('resultOverlay').dataset.grade=elite?'S':won?'A':'';put('resultKicker',`${routeName()} · ${won?(elite?'S级':'A级'):incomplete?'签收未齐':tailFailed?'停站未完成':unsafe?'靠站未稳':'这趟散架了'}`);
-    rewardStages(stageReward);
+    rewardStages(stageReward);rewardProgress(progressReward,stageReward);deliveryReport(snap);
     put('restartBtn',mode==='daily'?'同题原线再试 ↻':'原线再试一趟 ↻');put('resultTitle',won?(elite?'S级！这趟稳住了':'两站停好，收工！'):incomplete?`还差${Math.max(1,required-snap.catches)}件，原线再试。`:tailFailed?`第${tail?.step||1}站，差一点。`:unsafe?'最后靠站没稳住。':'看懂这次，下趟稳住。');
     put('resultScore',score);put('resultSummary',`签收${snap.catches}件 · 两站${stops}/2 · ${timeText(snap.elapsed)}秒`);put('resultCatches',snap.catches);put('resultPerfect',perfect);put('resultSaves',snap.saves);put('resultTail',`${stops}/2`);put('resultTime',timeText(snap.elapsed));put('resultTimeBonus',`+${snap.timeBonus||0}`);put('resultTailBonus',`+${snap.tailBonus||tail?.bonus||0}`);put('resultAssists',snap.assists||0);put('resultRetries',snap.retries||0);put('resultGap',isNew?'✦ 本线新纪录':`距本线个人纪录还有 ${Math.max(0,old-score)} 分`);
     put('resultText',won?(elite?'无翻车、无扶正，精准签收达标。':`本趟${3-snap.lives}次翻车、${snap.assists||0}次扶正，精准${perfect}件。${accident?`末次：${NAMES[accident.cargoType]||'货物'}${accident.cause==='漏接'?'没接到':accident.cause||'掉落'}。`:''}`):incomplete?`投递已结束，签收${snap.catches}/${required}件，${snap.elapsed<snap.duration?'本趟提前结束。':'本趟未接齐。'}`:tailFailed?`货已接齐，第${tail?.step||1}站还没停稳。到位后还要松手，等整车稳定。`:unsafe?'到站时货物仍未稳定，本趟未能安全收工。':accident?`${NAMES[accident.cargoType]||'货物'}${accident.cause==='漏接'?'没接到':accident.cause}，用完了本趟机会。`:'本趟机会用完了，原线再练一次。');
-    const run={won,score,time:Math.round(snap.elapsed*100)/100,catches:snap.catches,stops,lives:snap.lives,assists:snap.assists||0,perfectCatches:perfect,finishReason:snap.finishReason,requiredCatches:required,tail:{step:tail?.step||1},lastCrash:accident?{cargoId:accident.cargoId,cargoType:accident.cargoType,cause:accident.cause,side:accident.side,advice:accident.advice,at:accident.at??accident.elapsed}:null};
+    const run={won,score,time:Math.round(snap.elapsed*100)/100,catches:snap.catches,stops,lives:snap.lives,assists:snap.assists||0,perfectCatches:perfect,finishReason:snap.finishReason,requiredCatches:required,catchDetails:catchFacts(snap),deliveryOutcomes:unavailableFacts(snap),tail:{step:tail?.step||1},lastCrash:accident?{cargoId:accident.cargoId,cargoType:accident.cargoType,cause:accident.cause,side:accident.side,advice:accident.advice,at:accident.at??accident.elapsed}:null};
     const delta=compareRuns(recentRuns[key],run);put('resultDelta',delta.text);$('resultDelta').classList.toggle('hidden',!delta.text);$('resultDelta').dataset.tone=delta.improved?'improved':'neutral';recentRuns[key]=run;lastReportRun=runId;try{localStorage.setItem('xiaban-last-v8',JSON.stringify(recentRuns))}catch{}bestLabel();
     put('nextRunHint',nextGoal(won,snap));put('recordHint',`${routeName()}单独记录；原线重试保留货物、路况和两站位置。`);$('replayBtn').classList.toggle('hidden',!lastAccident||lastAccident.frames.length<2);showReport();['warning','touchGuide','balancePanel','actionGuide','dropBadge','tutorialPill','recoveryNote','parkingBadge','settleBanner','tailPanel','jobPanel','practiceHint'].forEach(id=>$(id).classList.add('hidden'));
   }
@@ -386,10 +523,12 @@
       put('menuSummary',playing?[focus?.text,challenge?.summary,'本局已暂停，车和货都等你。'].filter(Boolean).join(' '):'换条线、开声音，或者回大厅。');
       put('resumeBtn',playing?'继续本局 →':current.status==='ready'?'返回当前页面 →':'返回成绩 →');put('menuHome',playing?'返回大厅 · 结束本局':'返回大厅');
       $('menuSkipTutorial').classList.toggle('hidden',mode!=='tutorial'||!playing);syncSound();$('pauseOverlay').classList.remove('hidden');$('resumeBtn').focus({preventScroll:true});
-    }else{menuOpen=false;$('resultOverlay').inert=false;$('pauseOverlay').classList.add('hidden');if(engine.snapshot().status==='playing'){isPaused=false;engine.pause(false);canvas.focus({preventScroll:true})}else if(['win','lose'].includes(snap.status))$('restartBtn').focus({preventScroll:true})}
+    }else{menuOpen=false;$('resultOverlay').inert=false;$('pauseOverlay').classList.add('hidden');if(engine.snapshot().status==='playing'){isPaused=false;engine.pause(false);canvas.focus({preventScroll:true})}else if(['win','lose'].includes(snap.status))($('graduateNextBtn').classList.contains('hidden')?$('restartBtn'):$('graduateNextBtn')).focus({preventScroll:true})}
   }
-  function goHome(){runId++;practice=null;runStage=null;runEvidence=emptyEvidence();menuOpen=false;isPaused=false;pointer=null;keys.clear();replay=null;wreck=null;particles=[];texts=[];engine.reset(mode);engine.status='ready';snap=engine.snapshot();document.body.classList.remove('playing','result-mode');$('resultOverlay').inert=false;setFocus(false);$('gameWindow').classList.remove('tail-mode','replaying','tutorial-mode');['pauseOverlay','resultOverlay','resultChallenge','resultPractice','stageReward','hud','actionGuide','tutorialPill','dropBadge','parkingBadge','settleBanner','recoveryNote','tailPanel','jobPanel','practiceHint','balancePanel','replayBanner','warning'].forEach(id=>$(id).classList.add('hidden'));$('startOverlay').classList.remove('hidden');$('chaosBtn').disabled=true;$('gameMessage').classList.remove('show');refreshMode();put('commentary','换条线，开点声音，下一趟稳稳回家。');window.scrollTo({top:0,behavior:'auto'})}
+  function goHome(){runId++;openBadge=null;practice=null;runStage=null;runEvidence=emptyEvidence();menuOpen=false;isPaused=false;pointer=null;keys.clear();replay=null;wreck=null;particles=[];texts=[];engine.reset(mode);engine.status='ready';snap=engine.snapshot();document.body.classList.remove('playing','result-mode');$('resultOverlay').inert=false;setFocus(false);$('gameWindow').classList.remove('tail-mode','replaying','tutorial-mode');['pauseOverlay','resultOverlay','resultChallenge','resultPractice','resultDelivery','resultMilestone','stageReward','graduateNextBtn','badgeInfo','hud','actionGuide','tutorialPill','dropBadge','parkingBadge','settleBanner','recoveryNote','tailPanel','jobPanel','practiceHint','balancePanel','replayBanner','warning'].forEach(id=>$(id).classList.add('hidden'));$('startOverlay').classList.remove('hidden');$('chaosBtn').disabled=true;$('gameMessage').classList.remove('show');refreshMode();put('commentary','换条线，开点声音，下一趟稳稳回家。');window.scrollTo({top:0,behavior:'auto'})}
   $('startBtn').onclick=()=>start();$('restartBtn').onclick=()=>mode==='tutorial'?start('normal'):retryRun();$('quickRestart').onclick=retryRun;$('hudRestart').onclick=retryRun;$('pauseRestartBtn').onclick=retryRun;$('resultNewRoute').onclick=()=>start('normal',{newRoute:true});$('resultMenu').onclick=()=>pause(true);$('pauseBtn').onclick=()=>pause(!menuOpen);$('resumeBtn').onclick=()=>pause(false);$('skipTutorial').onclick=()=>start('normal');$('tutorialBtn').onclick=()=>start('tutorial');$('focusBtn').onclick=()=>{const on=!document.body.classList.contains('focus-mode');setFocus(on);if(!on&&snap.status==='playing'&&!isPaused)pause(true)};
+  $('graduateNextBtn').onclick=()=>{const next=graduationNext();if(next)start(next.mode,{variant:next.variant,newRoute:true})};
+  for(const [kind,id]of Object.entries({s:'badgeS',time:'badgeTime',full:'badgeFull'}))$(id).onclick=()=>toggleBadge(kind);
   $('menuBtn').onclick=$('homeMenu').onclick=()=>pause(true);$('menuHome').onclick=$('resultHome').onclick=goHome;$('menuNormal').onclick=$('menuSkipTutorial').onclick=()=>start('normal');$('menuDaily').onclick=$('resultDaily').onclick=()=>start('daily');$('menuTutorial').onclick=()=>start('tutorial');$('menuSound').onclick=toggleSound;
   $('replayBtn').onclick=playReplay;$('exitReplay').onclick=stopReplay;
   $('chaosBtn').onclick=()=>{if(snap.status!=='playing'||chaosCooldown>0)return;if(engine.triggerChaos()){chaosCooldown=5;$('commentary').textContent='你点的妖风，已为你加急送达。'}else $('commentary').textContent='先接住第一件货，妖风马上到。'};
@@ -455,7 +594,7 @@
       $('jobPanel').dataset.phase=job.phase;
       const closed=job.deliveriesClosed;
       const title=closed?(job.airborneUnsigned>0?'末件正在落下':'投递已结束'):job.retryCount>0?`还有${job.retryCount}件补发`:job.remainingDeliveries>0?`另有${job.remainingDeliveries}件待投`:job.airborneUnsigned>0?'新货正在落下':'货已投完';
-      const expired=[job.unthrownCount>0?`${job.unthrownCount}件未投出`:'',job.retryExpiredCount>0?`${job.retryExpiredCount}件补发过窗`:''].filter(Boolean).join('，');
+      const outcomes=unavailableFacts(snap),first=outcomes[0],expired=first?`${parcelName(first)}${first.kind==='unthrown'?'未投出':'补发过窗'}${outcomes.length>1?`，另${outcomes.length-1}件未送达`:''}`:[job.unthrownCount>0?`${job.unthrownCount}件未投出`:'',job.retryExpiredCount>0?`${job.retryExpiredCount}件补发过窗`:''].filter(Boolean).join('，');
       const detail=closed?(job.airborneUnsigned>0?`还有真实接货机会，接稳再停站${expired?`；${expired}`:''}`:expired?`${expired}；先稳住旧货`:job.detail||'先稳住旧货，准备进入两站'):job.retryCount>0?`先接补发货${job.remainingDeliveries>0?`，另有${job.remainingDeliveries}件待投`:'，接住才算签收'}`:job.remainingDeliveries>0?'先看下一件，投完再进两站':job.airborneUnsigned>0?'接住这一件，再稳住旧货':job.detail||'先稳住旧货，随后进入两站';
       put('jobTitle',title);put('jobDetail',g?.rescueState==='edge'?(closed?'边界状况优先，停站暂缓':'边界状况优先，新货稍等'):g?.kind==='rescue'?(closed?'先救稳旧货，再准备两站':'先救稳旧货，后续投递会等待'):detail);
     }

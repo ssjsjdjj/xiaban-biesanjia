@@ -6,12 +6,12 @@
   <meta name="theme-color" content="#f6f3e9">
   <meta name="description" content="拉着小破车，接住老板的饼和同事的锅。单指稳车，60秒完整到家。">
   <title>下班别散架 — 今晚，稳着点。</title>
-  <link rel="stylesheet" href="style.css?v=011-26b5661b75">
+  <link rel="stylesheet" href="style.css?v=012-8dfff87ebe">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="./" aria-label="下班别散架首页"><span class="brand-icon">↝</span><span>下班别散架<small>AFTER HOURS DELIVERY CLUB</small></span></a>
-    <div class="top-actions"><span class="prototype-label"><i></i> 收章再下班 011</span><button id="soundBtn" class="plain-button" aria-pressed="false">♪ 声音关</button><button id="helpBtn" class="help-button" aria-label="玩法说明">?</button></div>
+    <div class="top-actions"><span class="prototype-label"><i></i> 练准再出发 012</span><button id="soundBtn" class="plain-button" aria-pressed="false">♪ 声音关</button><button id="helpBtn" class="help-button" aria-label="玩法说明">?</button></div>
   </header>
 
   <main class="layout">
@@ -23,7 +23,7 @@
       <div class="session-facts"><span><b>4+</b> 件签收</span><span><b>2</b> 站停稳</span><span><b>60</b> 秒内</span></div>
       <div class="mode-picker" role="group" aria-label="选择路线"><button class="mode active" data-mode="tutorial" aria-pressed="true">新手三步</button><button class="mode" data-mode="normal" aria-pressed="false">轻松下班</button><button class="mode" data-mode="daily" aria-pressed="false">今日同题</button></div>
       <div class="record"><span class="record-star">✦</span><div><small>你的最佳下班记录</small><strong id="bestRecord">第一趟，等你出发</strong></div><span class="record-arrow">↗</span></div>
-      <div class="home-tools" id="homeTools"><span class="route-brief hidden" id="routeBrief"></span><span class="grade-record hidden" id="gradeRecord"></span><span class="challenge-record hidden" id="challengeRecord"></span><div class="route-stages hidden" id="routeStages" role="group" aria-label="本线收章进度"><span id="badgeS" data-earned="false">○ S章</span><span id="badgeTime" data-earned="false">○ 限时章</span><span id="badgeFull" data-earned="false">○ 全准章</span><b id="stageCount">0/3</b></div><span id="nextChallengeHint">下一趟：签收4件，再停稳两站。</span><button id="homeMenu">路线与设置 ☰</button><button id="tutorialBtn">重练三步</button></div>
+      <div class="home-tools" id="homeTools"><span class="route-brief hidden" id="routeBrief"></span><span class="grade-record hidden" id="gradeRecord"></span><span class="challenge-record hidden" id="challengeRecord"></span><div class="route-stages hidden" id="routeStages" role="group" aria-label="本线收章进度"><button type="button" id="badgeS" data-earned="false" aria-controls="badgeInfo" aria-expanded="false">○ S章</button><button type="button" id="badgeTime" data-earned="false" aria-controls="badgeInfo" aria-expanded="false">○ 限时章</button><button type="button" id="badgeFull" data-earned="false" aria-controls="badgeInfo" aria-expanded="false">○ 全准章</button><b id="stageCount">0/3</b></div><div class="badge-info hidden" id="badgeInfo" role="status"></div><span class="milestone-progress hidden" id="milestoneProgress"></span><span id="nextChallengeHint">下一趟：签收4件，再停稳两站。</span><button id="homeMenu">路线与设置 ☰</button><button id="tutorialBtn">重练三步</button></div>
       <p class="desktop-hint"><span>←</span><span>→</span> 键盘也能开 · 空格开始 / 菜单</p>
     </section>
 
@@ -40,19 +40,19 @@
         <div class="recovery-note hidden" id="recoveryNote"></div>
         <div class="road-warning hidden" id="warning" role="status"><span>⚠</span> <b id="warningText"></b></div>
         <div class="game-message" id="gameMessage" aria-live="polite"></div>
-        <div class="overlay start-overlay" id="startOverlay"><div class="route-stamp">第 011 趟 · 看准落点，亲手接稳</div><h2>东西可以离谱。<br><span>你得稳稳到家。</span></h2><p id="startCopy">先学接货、松手刹车，再试救货。<br>三步练习不限时，失误不扣机会。</p><button class="big-button" id="startBtn">三步学会稳车 →</button><button class="text-button" id="skipTutorial">我会玩，直接下班 →</button><small>随时点 ☰ 切路线、开声音或返回大厅</small></div>
+        <div class="overlay start-overlay" id="startOverlay"><div class="route-stamp">第 012 趟 · 看准落点，亲手接稳</div><h2>东西可以离谱。<br><span>你得稳稳到家。</span></h2><p id="startCopy">先学接货、松手刹车，再试救货。<br>三步练习不限时，失误不扣机会。</p><button class="big-button" id="startBtn">三步学会稳车 →</button><button class="text-button" id="skipTutorial">我会玩，直接下班 →</button><small>随时点 ☰ 切路线、开声音或返回大厅</small></div>
         <div class="overlay menu-overlay hidden" id="pauseOverlay"><span class="overlay-kicker">喘口气，也挺好</span><h2 class="menu-title" id="menuTitle">先靠边歇会。</h2><p id="menuSummary">本局已暂停，货和车都等你。</p><button class="big-button" id="resumeBtn">继续本局 →</button><div class="menu-grid"><button id="menuHome">返回大厅 · 结束本局</button><button id="menuNormal">轻松下班</button><button id="menuDaily">今日同题</button><button id="menuTutorial">重练新手三步</button><button id="menuHelp">玩法说明</button><button id="menuSound" aria-pressed="false">♪ 音效：关</button><button id="menuSkipTutorial">跳过教学，正式出发 →</button><button id="pauseRestartBtn">原线重新开始</button></div></div>
         <div class="overlay result-overlay hidden" id="resultOverlay" role="region" aria-label="本趟下班报告">
           <div class="result-scroll" id="resultScroll">
-            <span class="overlay-kicker" id="resultKicker">今日下班报告</span><h2 id="resultTitle">这趟稳住了。</h2><div class="stage-reward hidden" id="stageReward" role="status"></div>
+            <span class="overlay-kicker" id="resultKicker">今日下班报告</span><h2 id="resultTitle">这趟稳住了。</h2><div class="stage-reward hidden" id="stageReward" role="status"></div><div class="result-milestone hidden" id="resultMilestone" role="status"></div>
             <div class="result-score"><b id="resultScore">0</b><span>稳住分</span></div>
             <div class="result-summary" id="resultSummary">签收 0 件 · 两站 0/2</div>
-            <div class="achievement-strip hidden" id="resultAchievement"></div><div class="result-challenge hidden" id="resultChallenge" role="status"></div><div class="run-delta hidden" id="resultDelta"></div><p id="resultText"></p><div class="next-run-hint" id="nextRunHint">原线再试，练好这一次。</div><div class="result-practice hidden" id="resultPractice"></div>
+            <div class="achievement-strip hidden" id="resultAchievement"></div><div class="result-challenge hidden" id="resultChallenge" role="status"></div><div class="run-delta hidden" id="resultDelta"></div><p id="resultText"></p><div class="result-delivery hidden" id="resultDelivery" role="status"></div><div class="next-run-hint" id="nextRunHint">原线再试，练好这一次。</div><div class="result-practice hidden" id="resultPractice"></div>
             <button class="text-button replay-trigger hidden" id="replayBtn">↶ 看刚才怎么散的</button>
             <details class="result-stats" id="resultStats"><summary>查看本趟详细数据</summary><div class="result-details"><span>签收 <b id="resultCatches">0</b> 件</span><span>精准 <b id="resultPerfect">0</b> 件</span><span>险救 <b id="resultSaves">0</b> 次</span><span>两站 <b id="resultTail">0/2</b></span><span>用时 <b id="resultTime">0</b> 秒</span><span>提前收工 <b id="resultTimeBonus">+0</b></span><span>停站奖金 <b id="resultTailBonus">+0</b></span><span>扶正 <b id="resultAssists">0</b> 次</span><span>补发 <b id="resultRetries">0</b> 次</span></div><div class="record-gap" id="resultGap"></div><button class="text-button" id="resultDaily">挑战今日同题</button></details>
             <small id="recordHint">原线保留这趟的货物与停站位置。</small>
           </div>
-          <div class="result-dock" id="resultDock"><button class="big-button" id="restartBtn">原线再试一趟 ↻</button><div class="route-next-hint hidden" id="routeNextHint"></div><div class="result-actions"><button class="text-button" id="resultNewRoute" aria-label="换条收工线">换条线 ↗</button><button class="text-button" id="resultHome">返回大厅</button><button class="text-button" id="resultMenu">☰ 菜单</button></div></div>
+          <div class="result-dock" id="resultDock"><button class="big-button hidden" id="graduateNextBtn">下一条收工线 →</button><button class="big-button" id="restartBtn">原线再试一趟 ↻</button><div class="route-next-hint hidden" id="routeNextHint"></div><div class="result-actions"><button class="text-button" id="resultNewRoute" aria-label="换条收工线">换条线 ↗</button><button class="text-button" id="resultHome">返回大厅</button><button class="text-button" id="resultMenu">☰ 菜单</button></div></div>
         </div>
         <div class="replay-banner hidden" id="replayBanner"><span>↶ 事故回看 · 慢半拍</span><button id="exitReplay">返回报告 ×</button></div>
         <div class="replay-caption"><b id="replayCause"></b><span id="replayAdvice"></span></div>
@@ -70,12 +70,12 @@
       <div class="cargo-item"><canvas data-cargo="pot" width="84" height="76" aria-hidden="true"></canvas><div><h3>同事甩的锅</h3><p>圆滚滚的，接好别再甩。</p><span>容易侧翻</span></div></div>
       <div class="cargo-item"><canvas data-cargo="monday" width="84" height="76" aria-hidden="true"></canvas><div><h3>沉重的周一</h3><p>小小一块，分量很大。</p><span>注意重心</span></div></div>
       <div class="cargo-item"><canvas data-cargo="fish" width="84" height="76" aria-hidden="true"></canvas><div><h3>顺手摸的鱼</h3><p>有点滑，但不想放手。</p><span>小心溜走</span></div></div>
-      <div class="tip-note"><span>✳ 司机小抄 011</span><p>至少四件，还要等整单投完。<br>稳住旧货，就能早点进两站。<br>每线收三章，毕业再换一条。</p></div>
+      <div class="tip-note"><span>✳ 司机小抄 012</span><p>至少四件，还要等整单投完。<br>稳住旧货，就能早点进两站。<br>每线收三章，毕业再换一条。</p></div>
     </aside>
   </main>
   <footer><span>生活有点晃。回家的路，慢慢开。</span><span>一款不太正经的物理小游戏 <i>✳</i></span></footer>
 
-  <dialog id="helpDialog"><button class="dialog-close" id="closeHelp" aria-label="关闭说明">×</button><span class="overlay-kicker">上车前，知道这三件事</span><h2>接齐货，停好车，<br>早点收工。</h2><ol><li><b>接货：</b>真实签收至少4件；漏接在投递窗口内按原件补发，窗口不足会提示截止。归位不重复加分。</li><li><b>停站：</b>货物投递结束并稳住后，按亮区顺序完成两站，到位后松手停稳。</li><li><b>收工：</b>最多60秒，货齐、两站完成且车货安全即可提前结束，早到有奖金。</li></ol><p>旧货危险时先救货。长时间不稳会扶正已签收货，不代接新货；扶正次数会记入本趟报告。三次翻车结束。投递结束后若已无法接齐，会直接报告本趟结果。</p><p>新手三步不限时、不扣机会。随时点 ☰ 可跳过教学、换路线、开声音或回大厅。</p><p>原线重试保留货物、路况和两站位置；想换题再点「换条线」。每条收工线分别保留最高分和最高评级。获得的S级不会被后续失败覆盖。S级需不翻车、无扶正，并精准签收至少3件。</p><p>每条路线可收三枚章：S章、限时章、全单精准章。限时目标在首次可信S用时后固定，达成一次即可；全单精准章需保持S并真实签收六件、精准六件。集齐三章即本线毕业，可换线继续收章，也可原线自由跑。</p><p>局中“S关余”直接显示本关剩余时间，菜单可看完整条件。超过限时仍可争取本趟S级，已有S和已获徽章继续保留；历史记录只按可确认的成绩折算新章。新章达成有独立印章与音效。</p><p class="help-keys">键盘 ← → / A D 移动，按住轻挪、松开刹车；空格打开菜单，R 原线重试。<br>手机按住画面任意空地左右拖动，松手刹车。</p><button class="big-button" id="gotIt">知道了，稳着来 →</button></dialog>
-  <script src="vendor/matter.min.js?v=011-72d30be0f5"></script><script src="engine.js?v=011-36894d11e0"></script><script src="app.js?v=011-5da5ecc29d"></script>
+  <dialog id="helpDialog"><button class="dialog-close" id="closeHelp" aria-label="关闭说明">×</button><span class="overlay-kicker">上车前，知道这三件事</span><h2>接齐货，停好车，<br>早点收工。</h2><ol><li><b>接货：</b>真实签收至少4件；漏接在投递窗口内按原件补发，窗口不足会提示截止。归位不重复加分。</li><li><b>停站：</b>货物投递结束并稳住后，按亮区顺序完成两站，到位后松手停稳。</li><li><b>收工：</b>最多60秒，货齐、两站完成且车货安全即可提前结束，早到有奖金。</li></ol><p>旧货危险时先救货。长时间不稳会扶正已签收货，不代接新货；扶正次数会记入本趟报告。三次翻车结束。投递结束后若已无法接齐，会直接报告本趟结果。</p><p>新手三步不限时、不扣机会。随时点 ☰ 可跳过教学、换路线、开声音或回大厅。</p><p>原线重试保留货物、路况和两站位置；想换题再点「换条线」。每条收工线分别保留最高分和最高评级。获得的S级不会被后续失败覆盖。S级需不翻车、无扶正，并精准签收至少3件。</p><p>每条路线可收三枚章：S章、限时章、全单精准章。限时目标在首次可信S用时后固定，达成一次即可；全单精准章需保持S并真实签收六件、精准六件。集齐三章即本线毕业，可换线继续收章，也可原线自由跑。</p><p>三章之前还有本线小目标：签收4件、停满两站、安全收工。精准件数的个人最佳会记录；原线重试会按真实接货偏差提示具体货物，归位不会重算精准。未投出与补发过期会在报告中说明具体货物和原因。毕业后可直接出发到下一条未毕业路线，也能保留原线自由跑。</p><p>局中“S关余”直接显示本关剩余时间，菜单可看完整条件。超过限时仍可争取本趟S级，已有S和已获徽章继续保留；历史记录只按可确认的成绩折算新章。新章达成有独立印章与音效。</p><p class="help-keys">键盘 ← → / A D 移动，按住轻挪、松开刹车；空格打开菜单，R 原线重试。<br>手机按住画面任意空地左右拖动，松手刹车。</p><button class="big-button" id="gotIt">知道了，稳着来 →</button></dialog>
+  <script src="vendor/matter.min.js?v=012-72d30be0f5"></script><script src="engine.js?v=012-daad9cc9a6"></script><script src="app.js?v=012-65bf5c3724"></script>
 </body>
 </html>

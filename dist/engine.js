@@ -65,6 +65,7 @@
       this.lives = 3;
       this.score = this.catches = this.saves = this.combo = this.bestCombo = 0;
       this.perfectCatches = this.precision = this.streak = this.bestStreak = this.retries = 0;
+      this._catchDetails = [];
       this.lastCrash = null;
       this.cargo = [];
       this.truck = { x: 210, y: 586, angle: 0, vx: 0 };
@@ -241,13 +242,21 @@
       const unsigned = [...this._unavailableIds].filter(id => !this._allCargo.find(info => info.id === id)?.caught);
       const unthrownCount = unsigned.filter(id => !this._sentIds.has(id)).length;
       const retryExpiredCount = unsigned.length - unthrownCount;
-      return { unthrownCount, retryExpiredCount, unavailableDeliveries: unsigned.length };
+      const unavailableItems = unsigned.map(cargoId => {
+        const index = this._dropPlan.findIndex(item => item.id === cargoId);
+        const original = this._dropPlan[index] || this._allCargo.find(item => item.id === cargoId);
+        const kind = this._sentIds.has(cargoId) ? 'retryExpired' : 'unthrown';
+        const reasonText = `${kind === 'unthrown' ? '原单投递' : '补发'}需在${DELIVERY_CUTOFF}秒前留够接货预告；本趟窗口不足，${kind === 'unthrown' ? '不再投出' : '不再补发'}。`;
+        return { cargoId, cargoType: original?.type || null, order: index < 0 ? cargoId : index + 1, kind, reasonText };
+      }).sort((a, b) => a.order - b.order);
+      return { unthrownCount, retryExpiredCount, unavailableDeliveries: unsigned.length, unavailableItems, cutoffSeconds: DELIVERY_CUTOFF };
     }
 
     _deliveryOutcomeLabels(outcomes) {
       const labels = [];
-      if (outcomes.unthrownCount) labels.push(`${outcomes.unthrownCount}件原单未投出`);
-      if (outcomes.retryExpiredCount) labels.push(`${outcomes.retryExpiredCount}件漏接，补发窗口已过`);
+      const names = kind => outcomes.unavailableItems.filter(item => item.kind === kind).map(item => `第${item.order}件${NAMES[item.cargoType] || '货物'}`).join('、');
+      if (outcomes.unthrownCount) labels.push(`${outcomes.unthrownCount}件原单未投出（${names('unthrown')}）`);
+      if (outcomes.retryExpiredCount) labels.push(`${outcomes.retryExpiredCount}件漏接，补发窗口已过（${names('retryExpired')}）`);
       return labels;
     }
 
@@ -374,7 +383,11 @@
       this.precision = Math.round(100 * this.perfectCatches / this.catches);
       const points = this.mode === 'tutorial' ? 0 : perfect ? 50 + Math.min(this.streak - 1, 4) * 10 : 25;
       this.score += points;
-      this._emit('catch', { cargoId: item.id, cargoType: item.type, text: perfect ? '精准签收！' : '接住了，松手稳住', quality: perfect ? 'perfect' : 'good', points, streak: this.streak, combo: this.combo, x: item.body.position.x, y: item.body.position.y });
+      const offsetX = item.body.position.x - this.truck.x, speed = this.truck.vx;
+      const offsetMiss = Math.abs(offsetX) > 24, speedMiss = Math.abs(speed) >= 95;
+      const detail = { cargoId: item.id, cargoType: item.type, order: this._dropPlan.findIndex(info => info.id === item.id) + 1 || item.id, quality: perfect ? 'perfect' : 'good', offsetX, speed, reason: perfect ? null : offsetMiss && speedMiss ? 'offset_speed' : offsetMiss ? 'offset' : 'speed', correction: perfect ? null : offsetMiss ? offsetX < 0 ? 'left' : 'right' : 'brake', at: this.elapsed, retry: Boolean(item.retry) };
+      this._catchDetails.push(detail);
+      this._emit('catch', { ...detail, text: perfect ? '精准签收！' : '接住了，松手稳住', points, streak: this.streak, combo: this.combo, x: item.body.position.x, y: item.body.position.y });
       if (this._tutorial?.step === 1) { this._emit('tutorial', { step: 1, phase: 'success', text: '第一步完成：真的挪车接住了！' }); this._enterTutorialStep(2); }
     }
 
@@ -828,14 +841,15 @@
       const outcomes = this._deliveryOutcomes();
       const unavailableDeliveries = outcomes.unavailableDeliveries;
       const outcomeText = this._deliveryOutcomeLabels(outcomes).join('，');
+      const cutoffReason = outcomeText ? `投递需在${DELIVERY_CUTOFF}秒前留够接货预告，本趟窗口不足，不再安排这些货` : '';
       const phase = terminal ? 'complete' : this.settling ? 'settling' : this._tail.active ? 'tail' : unsigned.size || (!this._deliveriesClosed && (remainingDeliveries || retryIds.size)) ? 'delivery' : 'settling';
       let detail;
       if (this.mode === 'tutorial') detail = this._tutorial?.completed ? '三步练习完成，可以正式接单。' : '先完成挪车、松手和救货三步练习。';
       else if (terminal) {
         const result = this.status === 'win' ? `签收${this.catches}/${planned.size}件，两站停稳，安全收工` : this.finishReason === 'incomplete' ? `投递已结束，签收${this.catches}/${this.requiredCatches}件，未能接齐` : `本趟结束，已签收${this.catches}件`;
-        detail = `${result}${outcomeText ? `；${outcomeText}` : ''}。`;
+        detail = `${result}${outcomeText ? `；${outcomeText}；${cutoffReason}，原线再试时留意预告` : ''}。`;
       }
-      else if (this._deliveriesClosed && (remainingDeliveries || retryIds.size || unavailableDeliveries)) detail = `投递已截止${outcomeText ? `，${outcomeText}` : ''}${unsigned.size ? `；还有${unsigned.size}件在途中，先接稳它` : `，${this._tail.active ? '先完成收工两站' : '先把已签收货稳住'}`}。`;
+      else if (this._deliveriesClosed && (remainingDeliveries || retryIds.size || unavailableDeliveries)) detail = `后续投递已结束${outcomeText ? `，${outcomeText}；${cutoffReason}` : ''}${unsigned.size ? `；还有${unsigned.size}件在途中，先接稳它` : `；${this._tail.active ? '先完成收工两站' : '先把已签收货稳住'}`}。`;
       else if (retryIds.size) detail = `待补发${retryIds.size}件，接住才算签收${remainingDeliveries ? `；另有${remainingDeliveries}件待投递` : ''}。`;
       else if (remainingDeliveries) detail = `${minimumMet ? `已达最低${this.requiredCatches}件` : `还差${this.requiredCatches - this.catches}件达标`}，整单还剩${remainingDeliveries}件待投递。`;
       else if (unsigned.size) detail = `整单已投出，${unsigned.size}件仍在途中，接稳后停两站。`;
@@ -851,16 +865,16 @@
       const rescue = this._rescueHintCargo();
       return {
         status: this.status, mode: this.mode, elapsed: this.elapsed, duration: this.duration, lives: this.lives, requiredCatches: this.requiredCatches, finishReason: this.finishReason,
-        job: this._job(), route: { ...this.route, ...(this.route.next ? { next: { ...this.route.next } } : {}) },
+        job: this._job(), route: { ...this.route, ...(this.route.next ? { next: { ...this.route.next } } : {}), options: NORMAL_ROUTES.map((route, variant) => ({ variant, name: route.name, tagline: route.tagline })) },
         rescue: rescue ? { cargoId: rescue.id, state: this._rescueState(rescue), risk: this._cargoRisk(rescue), supportMargin: this._supportMargin(rescue), projectedSupportMargin: this._supportMargin(rescue, .2), safeFor: this._rescueLatch?.id === rescue.id ? this._rescueLatch.safeFor : 0 } : null,
         score: Math.floor(this.score), catches: this.catches, saves: this.saves, combo: this.combo, bestCombo: this.bestCombo,
         settling: this.settling, assists: this.assists, timeBonus: this.timeBonus, tailBonus: this.tailBonus,
-        perfectCatches: this.perfectCatches, precision: this.precision, streak: this.streak, bestStreak: this.bestStreak, retries: this.retries,
+        perfectCatches: this.perfectCatches, precision: this.precision, streak: this.streak, bestStreak: this.bestStreak, retries: this.retries, catchDetails: this._catchDetails.map(detail => ({ ...detail })),
         truck: { ...this.truck, braking: this._braking },
         cargo: this.cargo.map(c => ({ id: c.id, type: c.type, x: c.body.position.x, y: c.body.position.y, angle: c.body.angle, vx: c.body.velocity.x, vy: c.body.velocity.y, w: c.w, h: c.h, r: c.r, mass: c.mass, caught: c.caught, restored: c.restored, retry: c.retry, supported: c.supported, risk: this._cargoRisk(c), landingX: this._landingX(c) })),
         warning: this.warning ? { ...this.warning } : null, stage: Math.min(3, 1 + Math.floor(this.elapsed / 20)), wind: this.wind,
         paused: this._paused, chaosCooldown: Math.max(0, 5 - (this.elapsed - this._lastChaos)), balance: this._balance(),
-        nextDrop: this._nextDrop(), guidance: this._guidance(), recovery: this._recoveryInfo && this.elapsed < this._recoveryInfoUntil ? { ...this._recoveryInfo } : null,
+        nextDrop: this._nextDrop(), guidance: this._guidance(), recovery: this._recoveryInfo && this.elapsed < this._recoveryInfoUntil ? { ...this._recoveryInfo, ...(this._recoveryInfo.unavailableItems ? { unavailableItems: this._recoveryInfo.unavailableItems.map(item => ({ ...item })) } : {}) } : null,
         lastCrash: this.lastCrash ? { ...this.lastCrash } : null, dateSeed: this.dateSeed, tutorial,
         tail: this.mode === 'tutorial' ? null : { active: this._tail.active, completed: this._tail.completed, startAt: this._tail.startAt, step: this._tail.step, total: 2, targetX: this._tail.targetX, progress: this._tail.progress, title: this._tail.title, variant: this._tail.variant, bonus: this.tailBonus, feedback }
       };
