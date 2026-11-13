@@ -17,8 +17,6 @@ jobs:
     defaults:
       run:
         working-directory: games/thunderblade
-    env:
-      THUNDERBLADE_OUTPUT_DIR: ${{ runner.temp }}/thunderblade-deliverables
     steps:
       - uses: actions/checkout@v7
         with:
@@ -27,5 +25,6 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - run: npm test
+      - run: THUNDERBLADE_OUTPUT_DIR="$RUNNER_TEMP/thunderblade-deliverables" npm test
+
 
