@@ -1,0 +1,32 @@
+{
+  "project": "惊雷·断潮",
+  "version": "0.4.0",
+  "sourceCommit": "20d766dfa58f26b06a4ee19e9c55ab999af81328",
+  "website": "https://thunderblade-nightfall-1111.zishu41.chatgpt.site",
+  "files": {
+    ".gitignore": "af1a250b3ad7b41e0248e8ca157f1ce6518b35b439b08bf90f7ddcfe01307e19",
+    "README.md": "db96239d1d070f432e3603dca7ef286267771871cf9b7cf2b142fda0f8835a8c",
+    "active60-checks.cjs": "7d9aec0e0149dc039c9550100f81387326ac5b5724bc4faf85ae5bb3c74b2433",
+    "active60-ui-checks.cjs": "65602b11656e6c1666a5bb5566c7cc8f36fbf613497d09f336b44c2f8016bc66",
+    "active60-wechat-checks.cjs": "3c5fe5bf603f120cda00ed39a08478ae67d106bc8fa44b3204f5ae0fa384d10b",
+    "art-checks.cjs": "1a47daffb52e9444e707a546b7b8aeaf4548f79f43cbf8f7d4422db1c7597416",
+    "build-deliverables.cjs": "cf7afbe61f7839e1e4a2fac7f627fe3433dc9bc7b6a48126c43708d1c2ae1c0a",
+    "dist/duel-art.js": "57ed59e6cacdde70d0ed3a0d3072af67995bffc359521fba699ac10833bad70d",
+    "dist/engine.js": "b1d35f5fcab2456f7de98e881e8c956fa36f7742aded28b446ba140dc2a9d09f",
+    "dist/index.html": "e2b17c0c17109417bb300fc4cb72d73596594eb3ad6e0e792f41b3bea398d1f2",
+    "dist/style.css": "f9e5727f8349467d543818fb4442613986e9dc5914d1dfc20b050ffeaa936971",
+    "dist/ui.js": "e558e5df38d285ca2e2bf9375d45b96404474d1a11e47e16dec59bc8388d066d",
+    "duel-variety-checks.cjs": "951372938edf30f3b640d1f19b467895e41e67936dbba98a8311cb09cc10a175",
+    "feel-regression-checks.cjs": "b86d04e75f04485f0d83d4192f65738d4e868e98352e1d6c6f11a18610d25064",
+    "mobile-feel-sim.cjs": "d8579d6d611e161b1879a9e5b8bc60bf56d66e8dee60433fbe73d4d342efcf5f",
+    "package-checks.cjs": "c624e99536346a38c3494d2fee349f30e5775934efe289f741ba98b67819efdf",
+    "package.json": "d710c8df722dcba2af5e3889216c86b362005f77981e8409715b09ab2f053aea",
+    "replay-session-sim.cjs": "d4fd6c418a50fc827dabc7859ea76d6147a1dbe92ea1ce4c6e04d2e7f93255b3",
+    "wechat/duel-art.js": "57ed59e6cacdde70d0ed3a0d3072af67995bffc359521fba699ac10833bad70d",
+    "wechat/engine.js": "b1d35f5fcab2456f7de98e881e8c956fa36f7742aded28b446ba140dc2a9d09f",
+    "wechat/game.js": "ba155211fe9cbc2125836d073059d3b52fff01264c32c638f5231098a56a75b3",
+    "wechat/game.json": "82526622d158db584fe0783eb469d01eaaa33a85360c28d83bf2b01cb031b8ec",
+    "wechat/project.config.json": "47789597ba6c30649d0a11127fd246d3af0cbb8d337457e1c5e3ba45379277aa"
+  },
+  "hashConvention": "SHA-256 of UTF-8 text with CRLF normalized to LF"
+}

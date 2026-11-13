@@ -1,0 +1,23 @@
+{
+  "name": "thunderblade-nightfall",
+  "version": "0.4.0",
+  "private": true,
+  "description": "惊雷·断潮：原创60秒主动首领战，包含浏览器与微信Canvas入口。",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "preview": "python -m http.server 4185 --bind 127.0.0.1 --directory dist",
+    "build": "node build-deliverables.cjs",
+    "simulate": "node mobile-feel-sim.cjs --summary",
+    "simulate:session": "node replay-session-sim.cjs --summary",
+    "test:core": "node active60-checks.cjs",
+    "test:feel": "node feel-regression-checks.cjs --assert-fixed",
+    "test:ui": "node active60-ui-checks.cjs",
+    "test:wechat": "node active60-wechat-checks.cjs",
+    "test:art": "node art-checks.cjs",
+    "test:variety": "node duel-variety-checks.cjs",
+    "test:package": "npm run build && node package-checks.cjs",
+    "test": "npm run test:core && npm run test:feel && npm run test:ui && npm run test:wechat && npm run test:art && npm run test:variety && npm run test:package"
+  }
+}

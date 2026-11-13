@@ -1,0 +1,13 @@
+node_modules/
+artifacts/
+outputs/
+work/
+*.log
+*.zip
+*.tar.gz
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+wechat/project.private.config.json
