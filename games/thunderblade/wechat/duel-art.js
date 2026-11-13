@@ -46,10 +46,163 @@
     else { path(c, [[0, -size], [size * .7, 0], [0, size], [-size * .7, 0]], '#403a26dd', '#f3dca0', 2); line(c, [[0, -6], [0, 6]], '#fff1be', 2); }
     c.restore();
   }
+  function drawRanger(g) {
+    const c = g.ctx, b = g.boss, a = g.attack, pose = g.bossPose || {}, u = phaseOf(pose);
+    const wind = a ? clamp(a.elapsed / a.duration) : 0, broken = g.broken > 0;
+    const recoil = pose.action === 'recoil' && u < 1 ? (1 - ease(u)) * 8 : 0;
+    const release = !a && (pose.action === 'volley' || pose.action === 'sidestep') && u < 1 ? Math.sin(u * Math.PI) : 0;
+    const facing = a ? a.angle : b.angle, sway = Math.sin(g.clock * 3) * 2;
+    c.save(); c.translate(b.x, b.y);
+    oval(c, 0, 13, 42, 16, '#00000060');
+    c.rotate(facing + Math.PI / 2); c.translate(0, sway + recoil);
+    c.rotate(broken ? .25 : -wind * .07);
+    // A long hood, narrow limbs and a tall recurved bow distinguish the ranger from the armored swordsman.
+    path(c, [[-19,-22],[-26,4],[-38,56],[-9,42],[0,57],[18,39],[35,48],[23,-17]], '#263d31', '#90a780', 1.5);
+    line(c, [[-11,17],[-17,40],[-22,51]], '#162f2e', 10);
+    line(c, [[12,17],[17,37],[26,47]], '#162f2e', 10);
+    line(c, [[-23,51],[-12,51]], '#adbc94', 5); line(c, [[23,47],[32,48]], '#adbc94', 5);
+    path(c, [[-17,-22],[12,-24],[19,14],[0,27],[-21,12]], b.flash > 0 ? '#f3e2b7' : '#809273', '#b7be8a', 1.5);
+    path(c, [[-14,-20],[-5,5],[-18,28],[-25,41],[-24,5]], '#abc69b');
+    line(c, [[-20,10],[18,9]], '#3f5140', 6);
+    // Quiver and arrow fletchings remain visible behind the shoulder.
+    line(c, [[-19,-5],[-31,-47]], '#644e34', 10);
+    for (const dx of [-5,0,5]) { line(c, [[-25+dx,-29],[-33+dx,-58]], '#c8c393', 1.5); path(c, [[-33+dx,-59],[-39+dx,-54],[-33+dx,-48],[-29+dx,-55]], '#85ad8f'); }
+    const handY = -22 - wind * 4, drawY = handY + 17 + wind * 23 - release * 18;
+    arm(c, -13,-15,31,drawY,'#829571','#bdd0a5',10);
+    arm(c, 13,-16,31,handY,'#829571','#bdd0a5',10);
+    // Bow limbs bend as the string is drawn; the arrow points along the locked firing direction.
+    c.save(); c.translate(31,handY); c.rotate(-Math.PI/2 + release * .13);
+    line(c, [[-6,-61],[11,-42],[16,-17],[16,17],[9,43],[-6,61]], '#443f2d', 8);
+    line(c, [[-6,-61],[10,-40],[14,0],[8,42],[-6,61]], '#d4b77a', 3);
+    line(c, [[-6,-60],[-17-wind*23,0],[-6,60]], '#d9e2b4', 1.5);
+    if (a || release < .2) {
+      line(c, [[-17-wind*23,0],[45,0]], '#f2deb1', 2);
+      path(c, [[45,0],[35,-4],[37,0],[35,4]], a && wind > .76 ? '#fff2b5' : '#e7c792');
+    }
+    c.restore();
+    oval(c, 0,-31,13,17,'#d1c5a0','#20362f',1.5);
+    path(c, [[-15,-33],[-15,-45],[0,-56],[17,-44],[19,-27],[9,-37],[0,-40],[-8,-34]], '#2d4e3e', '#a9b68c', 1.5);
+    path(c, [[-13,-28],[13,-29],[8,-15],[-3,-18]], '#38644f');
+    line(c, [[-8,-31],[1,-32],[8,-31]], broken ? '#a6f8db' : '#f4dc9c', 2);
+    const scarf = Math.sin(g.clock*4)*5;
+    path(c, [[-10,-23],[-32,-8],[-49-scarf,8],[-35,11],[-15,-9]], '#819c70', '#b1bd89', 1);
+    if (broken) { c.setLineDash([6,7]); g.circle(0,0,62,null,'#ffe0a4',3); c.setLineDash([]); }
+    c.restore();
+  }
+  function drawColossus(g) {
+    const c = g.ctx, b = g.boss, a = g.attack, pose = g.bossPose || {}, u = phaseOf(pose);
+    const t = a ? clamp(a.elapsed / a.duration) : 0, broken = g.broken > 0, open = g.armorOpen > 0;
+    const smashing = !a && /^(cleave|geyser|leap|ring)$/.test(pose.action) && u < 1;
+    const lift = a && a.type === 'leap' ? Math.sin(t*Math.PI)*15 : 0;
+    const recoil = pose.action === 'recoil' && u < 1 ? (1-ease(u))*7 : 0;
+    const glow = open || broken ? '#b8f9dd' : '#f2b56e';
+    const stone = b.flash > 0 ? '#ebd2ab' : open ? '#465852' : '#5d5a50';
+    const plate = b.flash > 0 ? '#f7deb2' : '#787363';
+    c.save(); c.translate(b.x, b.y + Math.sin(g.clock*1.8)*1.1 - lift + recoil);
+    oval(c, 0,28,81,28,'#00000070');
+    c.rotate(broken ? -.1 : smashing ? Math.sin(u*Math.PI)*.12 : a ? -t*.045 : 0);
+    for (const side of [-1,1]) {
+      path(c, [[side*12,18],[side*42,17],[side*48,57],[side*25,70],[side*9,48]], stone, '#ada184', 2);
+      path(c, [[side*18,53],[side*49,51],[side*58,73],[side*16,76]], '#474d48', '#9d967e', 2);
+      line(c, [[side*30,29],[side*26,46],[side*36,56]], '#c2865480', 2);
+    }
+    path(c, [[-43,-41],[0,-57],[47,-41],[57,12],[31,42],[-33,43],[-58,10]], stone, '#b8a589', 2.5);
+    // The exposed furnace core is always visible. Each intact rune slab covers one side.
+    path(c, [[0,-36],[24,-12],[14,22],[0,35],[-18,19],[-22,-12]], open ? '#4b796c' : '#674c37', glow, 2);
+    path(c, [[0,-19],[10,-3],[0,17],[-10,-3]], glow, '#f9e4b3', 1);
+    const armor = Number.isFinite(g.armor) ? g.armor : 2;
+    for (let i=0;i<2;i++) {
+      const side=i===0?-1:1;
+      if (i < armor && !open) {
+        path(c, [[side*5,-29],[side*31,-35],[side*40,-13],[side*30,19],[side*7,25]], plate, '#c4b48f', 2);
+        line(c, [[side*15,-20],[side*24,-10],[side*14,3],[side*26,10]], glow, 3);
+      } else {
+        line(c, [[side*14,-29],[side*23,-15],[side*12,-4],[side*26,15]], open ? '#9febcf' : '#db9b66', 2);
+      }
+    }
+    for (const side of [-1,1]) {
+      path(c, [[side*31,-43],[side*62,-36],[side*77,-4],[side*46,6]], plate, '#b3a286', 2);
+      line(c, [[side*46,-31],[side*62,-13]], '#d6bd8d', 2);
+    }
+    const windup = a ? ease(t) : smashing ? 1-ease(u) : 0;
+    const hammerTurn = -.25 - windup*1.7 + (smashing ? ease(u)*1.1 : 0);
+    const handX = 48 - windup*11, handY=-2-windup*25;
+    arm(c,44,-15,handX,handY,stone,'#a39a80',25);
+    arm(c,-44,-13,-51+windup*42,16-windup*40,stone,'#a39a80',23);
+    c.save(); c.translate(handX,handY); c.rotate(hammerTurn);
+    line(c, [[0,30],[0,-90]], '#302f2a', 13); line(c, [[-3,20],[-3,-89]], '#a39778', 3);
+    path(c, [[-35,-106],[31,-110],[47,-92],[35,-65],[-34,-64],[-46,-83]], '#4f5550', '#c3af8e', 2.5);
+    path(c, [[-29,-101],[26,-103],[34,-90],[24,-73],[-28,-72],[-36,-84]], '#787569', '#b29b7a', 1);
+    line(c, [[-18,-91],[0,-85],[19,-91]], glow, a && t>.76 ? 5 : 2.5);
+    c.restore();
+    path(c, [[-22,-68],[-12,-80],[17,-79],[29,-61],[19,-39],[-18,-40],[-30,-58]], '#414b47', '#b4a085', 2);
+    path(c, [[-19,-63],[0,-70],[20,-61],[12,-46],[-12,-47]], '#6e6c5c', '#ae9d7e', 1.5);
+    line(c, [[-16,-58],[-5,-56]],glow,4); line(c, [[6,-56],[18,-59]],glow,4);
+    for (const side of [-1,1]) path(c, [[side*16,-75],[side*28,-91],[side*34,-73],[side*26,-63]], '#a59a7f', '#dcc39b', 1.5);
+    if (open || broken) { c.setLineDash([7,8]); g.circle(0,0,84,null,glow,2.5); c.setLineDash([]); }
+    c.restore();
+  }
   function install(Nightfall) {
     if (!Nightfall || Nightfall.prototype.__duelArt) return;
     const proto = Nightfall.prototype;
     Object.defineProperty(proto, '__duelArt', { value: true });
+    const originalArena = proto.drawArena;
+    proto.drawArena = function () {
+      if (this.sceneId !== 'bamboo' && this.sceneId !== 'forge') { if (originalArena) originalArena.call(this); return; }
+      const c=this.ctx, forge=this.sceneId==='forge';
+      const bg=c.createRadialGradient(360,350,80,360,360,515);
+      bg.addColorStop(0,forge?'#39392f':'#304337'); bg.addColorStop(.72,forge?'#211f20':'#152e29'); bg.addColorStop(1,forge?'#110e16':'#071e22');
+      c.fillStyle=bg;c.fillRect(0,0,720,720);
+      if(forge) {
+        // Lava stays outside the walkable platform, so the red attack warnings retain clear contrast.
+        for(let i=0;i<12;i++) {
+          const ang=i*TAU/12, r=325+(i%3)*13, x=360+Math.cos(ang)*r,y=363+Math.sin(ang)*r;
+          line(c,[[x-25,y-8],[x+9,y+4],[x+22,y+32]],'#9c4e2b',11);
+          line(c,[[x-25,y-8],[x+9,y+4],[x+22,y+32]],'#d48a43',3);
+        }
+        for(const x of [48,672]) for(const y of [145,580]) {
+          path(c,[[x-19,y-23],[x+19,y-23],[x+25,y+32],[x-26,y+32]],'#161b1d','#8e7958',2);
+          oval(c,x,y-24,20,9,'#d68b45','#f3c376',2);
+          path(c,[[x-11,y-25],[x-5,y-48],[x+1,y-39],[x+9,y-55],[x+13,y-25]],'#f1bb65');
+        }
+      } else {
+        this.circle(568,85,48,'#cddcaf0c','#c4d2af17');
+        for(const side of [-1,1]) for(let i=0;i<7;i++) {
+          const x=side<0?25+i*11:695-i*11,y=(i*89)%720, lean=(i%2?1:-1)*12;
+          line(c,[[x,y-280],[x+lean,y+300]],i%2?'#244d3a':'#31563c',8);
+          for(let j=-2;j<=2;j++) { const yy=y+j*96;line(c,[[x-5,yy],[x+7,yy-1]],'#71916a',2); }
+          for(let j=0;j<3;j++) {
+            const yy=y-100+j*110, inward=side<0?1:-1;
+            line(c,[[x,yy],[x+inward*39,yy-29]],'#3d6949',2);
+            path(c,[[x+inward*12,yy-9],[x+inward*31,yy-37],[x+inward*25,yy-15]],'#477c53');
+            path(c,[[x+inward*22,yy-15],[x+inward*51,yy-24],[x+inward*35,yy-9]],'#3e6e4d');
+          }
+        }
+      }
+      this.circle(360,363,306,forge?'#3b38324d':'#7d91681a',forge?'#b697644d':'#a3b98540',2.5);
+      this.circle(360,363,291,forge?'#2c2c2a':'#293c32',forge?'#c0a47655':'#8ba77845',2);
+      this.circle(360,363,248,null,forge?'#c7ae6925':'#b6c49b18');
+      if(forge) {
+        for(let i=0;i<10;i++) {
+          const a=i*TAU/10;
+          line(c,[[360+Math.cos(a)*90,363+Math.sin(a)*90],[360+Math.cos(a)*279,363+Math.sin(a)*279]],'#aaa17e12',1);
+          const x=360+Math.cos(a)*271,y=363+Math.sin(a)*271;
+          c.save();c.translate(x,y);c.rotate(a);path(c,[[-6,-14],[6,-14],[10,0],[0,15],[-10,0]],null,'#b0945f65',2);c.restore();
+        }
+        this.circle(360,363,92,null,'#a9956720',2);
+      } else {
+        // Wooden seams in the quiet clearing do not masquerade as solid obstacles.
+        for(let y=140;y<620;y+=48) { const half=Math.sqrt(Math.max(0,275*275-(y-363)*(y-363)));line(c,[[360-half,y],[360+half,y]],'#b0bd8c13',1); }
+        for(let i=0;i<10;i++) {const a=i*TAU/10+.3,x=360+Math.cos(a)*278,y=363+Math.sin(a)*278;path(c,[[x-5,y],[x+8,y-4],[x+2,y+3]],'#8aa27447');}
+      }
+      if(this.options.effects!==false) {
+        for(let i=0;i<15;i++) {
+          const y=(i*83+(forge?-1:1)*this.clock*(forge?18:23)+1440)%720,x=(i*137+Math.sin(this.clock+i)*17)%720;
+          if(forge) this.circle(x,y,1.2+(i%2)*.5,'#ecc27b55');
+          else { c.save();c.translate(x,y);c.rotate(this.clock*.3+i);path(c,[[-4,0],[5,-2],[1,3]],'#8aa46c45');c.restore(); }
+        }
+      }
+    };
     proto.drawPlayer = function (p, ghost = false) {
       if (ghost) {
         if (this.options.effects === false) return;
@@ -134,6 +287,8 @@
       }
     };
     proto.drawBoss = function () {
+      if (this.bossId === 'archer') { drawRanger(this); return; }
+      if (this.bossId === 'colossus') { drawColossus(this); return; }
       const c = this.ctx, b = this.boss, a = this.attack, pose = this.bossPose || {}, u = phaseOf(pose), broken = this.broken > 0;
       const t = a ? clamp(a.elapsed / a.duration) : 0;
       const facing = a ? a.angle : Number.isFinite(pose.angle) && u < 1 ? pose.angle : b.angle;
@@ -218,6 +373,18 @@
         c.beginPath(); c.arc(a.x, a.y, radius, a.angle - half, a.angle - half + 2 * half * t); c.strokeStyle = active ? '#fff0c2' : color; c.lineWidth = active ? 7 : 5; c.stroke();
         // Radial hatching gives red unguardable attacks a distinct shape, not just a color.
         if (a.red) for (let i = 0; i < 7; i++) { const ang = a.angle - half + .15 + i * (2 * half - .3) / 6; line(c, [[a.x + Math.cos(ang) * (radius - 19), a.y + Math.sin(ang) * (radius - 19)], [a.x + Math.cos(ang) * radius, a.y + Math.sin(ang) * radius]], '#ffc0a5', 2); }
+      } else if (a.type === 'volley' || a.type === 'sidestep') {
+        for(const lane of a.lanes || []) {
+          const angle=Math.atan2(lane.ey-lane.y,lane.ex-lane.x),half=a.halfWidth || 23;
+          const dx=Math.sin(angle)*half,dy=-Math.cos(angle)*half;
+          c.beginPath();c.moveTo(lane.x+dx,lane.y+dy);c.lineTo(lane.ex+dx,lane.ey+dy);
+          c.arc(lane.ex,lane.ey,half,angle-Math.PI/2,angle+Math.PI/2);
+          c.lineTo(lane.x-dx,lane.y-dy);c.arc(lane.x,lane.y,half,angle+Math.PI/2,angle+Math.PI*1.5);c.closePath();
+          c.fillStyle='#eac77d16';c.fill();c.strokeStyle=color;c.lineWidth=1.5;c.stroke();
+          line(c,[[lane.x,lane.y],[lane.x+(lane.ex-lane.x)*t,lane.y+(lane.ey-lane.y)*t]],active?'#fff3b8':color,active?4:2);
+          const arrowX=lane.x+(lane.ex-lane.x)*t,arrowY=lane.y+(lane.ey-lane.y)*t;
+          line(c,[[arrowX-Math.cos(angle-.55)*11,arrowY-Math.sin(angle-.55)*11],[arrowX,arrowY],[arrowX-Math.cos(angle+.55)*11,arrowY-Math.sin(angle+.55)*11]],'#f7e3ad',2);
+        }
       } else if (a.type === 'rush' || a.type === 'thrust') {
         const half = a.halfWidth || (a.width ? a.width / 2 : a.type === 'thrust' ? 30 : 54), length = a.length || (a.type === 'thrust' ? 270 : 340);
         const ex = Number.isFinite(a.ex) ? a.ex : a.x + Math.cos(a.angle) * length, ey = Number.isFinite(a.ey) ? a.ey : a.y + Math.sin(a.angle) * length;
