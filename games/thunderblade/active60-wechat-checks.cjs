@@ -22,7 +22,9 @@ for (const device of devices) {
     snapshot() { return { ...this.s }; } draw() {} update() {}
     resetInput() { calls.push('clear'); this.held = false; this.input = [0, 0]; }
     cancelAttack() { calls.push('cancel'); this.held = false; }
-    start() { calls.push('start'); this.state = 'playing'; this.options.onEvent('start'); }
+    start() { calls.push('start'); this.s.challenge = false; this.state = 'playing'; this.options.onEvent('start'); }
+    startChallenge() { calls.push('challenge'); Object.assign(this.s, { challenge: true, stageNumber: 1, stageCount: 3, sceneName: '听雨庭', bossName: '逐影', bossId: 'duelist' }); this.state = 'playing'; this.options.onEvent('start'); }
+    continueChallenge(choice) { calls.push(['continue', choice]); this.s.stageNumber++; this.s.bossId = this.s.stageNumber === 2 ? 'archer' : 'colossus'; if (choice === 'heal') this.s.hp = Math.min(100, this.s.hp + 32); else this.s.powerBonus = (this.s.powerBonus || 0) + .12; this.state = 'playing'; this.options.onEvent('start'); return true; }
     pause() { calls.push('pause'); this.state = 'paused'; this.options.onEvent('pause'); }
     resume() { calls.push('resume'); this.state = 'playing'; this.options.onEvent('resume'); }
     home() { calls.push('home'); this.state = 'menu'; }
@@ -51,6 +53,7 @@ for (const device of devices) {
     assert(menuButton.y + menuButton.h <= get('controlBottom'));
   });
   start(menuButton.x + menuButton.w / 2, menuButton.y + menuButton.h / 2, 1); render();
+  check('primary menu starts challenge', () => assert.equal(instance.s.challenge, true));
   const base = get('stickBase'), layout = get('actionLayout');
   const clearCount = () => calls.filter(v => v === 'clear').length;
   check('all controls have large separate targets within safe area', () => {
@@ -133,6 +136,21 @@ for (const device of devices) {
     handlers.Show(); assert.equal(instance.state, 'paused'); assert.equal(queued.size, 1);
     labels.length = 0; render(); assert(labels.every(([, x, y]) => x >= 0 && x <= width && y > 0 && y < height));
     for (const b of get('buttons')) assert(b.y + b.h <= get('controlBottom'));
+  });
+  check('intermission clears both thumbs and keeps all choices within safe area', () => {
+    instance.state = 'playing'; render(); start(base.x + 44, base.y, 31); start(layout.attack.x, layout.attack.y, 32);
+    Object.assign(instance.s, { challenge: true, stageNumber: 1, stageCount: 3, hp: 70, cleared: 1, totalTime: 24, powerBonus: 0, nextBoss: { name: '鸣弦', sceneName: '竹海', hint: '横移避箭，弹反回箭' } });
+    instance.state = 'intermission'; instance.options.onEvent('intermission', instance.snapshot()); labels.length = 0; render();
+    assert.equal(get('moveTouch'), null); assert.equal(get('attackTouch'), null); assert.equal(instance.held, false); assert.deepEqual(instance.input, [0, 0]);
+    assert(labels.some(([s]) => s.includes('回血 +30'))); assert(labels.some(([s]) => s.includes('伤害 +12%')));
+    assert(labels.every(([, x, y]) => x >= 0 && x <= width && y > 0 && y < height));
+    const choices = get('buttons'); assert.equal(choices.length, 3); for (const b of choices) assert(b.y + b.h <= get('controlBottom'));
+    const before = calls.filter(v => v === 'up').length; end(32); assert.equal(calls.filter(v => v === 'up').length, before);
+    start(choices[1].x + 10, choices[1].y + 10, 33); render(); assert.equal(instance.state, 'playing'); assert.equal(instance.s.stageNumber, 2); assert.equal(instance.s.powerBonus, .12);
+    instance.state = 'paused'; render(); const retry = get('buttons[1]'); start(retry.x + 5, retry.y + 5, 34); assert.equal(calls.at(-2), 'challenge'); assert.equal(instance.s.stageNumber, 1);
+    Object.assign(instance.s, { hp: 60, cleared: 1, nextBoss: { name: '鸣弦', sceneName: '竹海', hint: '横移避箭' } }); instance.state = 'intermission'; instance.options.onEvent('intermission', instance.snapshot()); render();
+    const heal = get('buttons[0]'); start(heal.x + 10, heal.y + 10, 35); assert.equal(instance.s.hp, 92); assert.equal(instance.state, 'playing');
+    instance.s.challenge = false;
   });
   check('Chinese timeout result and every button fit', () => {
     instance.state = 'lost'; instance.options.onEvent('result', { win: false, reason: '六十秒已尽', time: 60, score: 500, bossHp: 800, bossMax: 5200, stats: { parries: 2, hits: 15, executions: 1 } });

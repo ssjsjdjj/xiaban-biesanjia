@@ -9,6 +9,7 @@ function context() {
   return new Proxy({ calls, get depth() { return stack.length; }, clear() { calls.length = 0; } }, {
     get(target, key) {
       if (key in target) return target[key];
+      if (key === 'createRadialGradient') return (...args) => { calls.push({key,args}); return {addColorStop(stop,color) { calls.push({key:'gradientStop',args:[stop,color]}); }}; };
       if (methods.has(key)) return (...args) => {
         for (const value of args.flat()) if (typeof value === 'number') assert.ok(Number.isFinite(value), `nonfinite ${key}`);
         if (key === 'save') stack.push({ ...styles });
@@ -30,9 +31,10 @@ class Scene {
   }
   circle(x, y, r, fill, stroke, width = 1) { const c = this.ctx; c.beginPath(); c.arc(x, y, Math.max(.1, r), 0, Math.PI * 2); if (fill) { c.fillStyle = fill; c.fill(); } if (stroke) { c.strokeStyle = stroke; c.lineWidth = width; c.stroke(); } }
   text(value, x, y) { this.ctx.fillText(String(value), x, y); }
+  drawArena() { this.ctx.fillStyle='#132b2c'; this.ctx.fillRect(0,0,720,720); }
 }
 install(Scene);
-const state = g => JSON.stringify({ player:g.player,boss:g.boss,input:g.input,actor:g.actor,bossPose:g.bossPose,attack:g.attack,effects:g.effects,attackHeld:g.attackHeld,chargeTime:g.chargeTime,phase:g.phase,broken:g.broken,style:g.style });
+const state = g => JSON.stringify({ player:g.player,boss:g.boss,input:g.input,actor:g.actor,bossPose:g.bossPose,attack:g.attack,effects:g.effects,attackHeld:g.attackHeld,chargeTime:g.chargeTime,phase:g.phase,broken:g.broken,style:g.style,bossId:g.bossId,sceneId:g.sceneId,armor:g.armor,armorOpen:g.armorOpen });
 function draw(g, fn) { const before = state(g); fn(); assert.equal(state(g), before, 'art must not alter combat state'); assert.equal(g.ctx.depth, 0, 'balanced save/restore'); assert.equal(g.ctx.globalAlpha, 1, 'restored opacity'); }
 let passed = 0;
 function check(name, fn) { fn(); passed++; console.log('PASS ' + name); }
@@ -108,6 +110,61 @@ check('all tell types stay visible in both effects modes', () => {
   for(const reduced of [false,true]) for(const type of ['sweep','twin','rush','leap','ring','thrust','cross','cleave','feint','geyser']) {
     const g=new Scene(reduced);draw(g,()=>g.drawTell({type,x:360,y:280,tx:360,ty:450,angle:1.2,ex:500,ey:510,elapsed:.95,duration:1,red:['leap','ring','cleave','geyser'].includes(type),comboIndex:1,comboTotal:2}));
     assert.ok(g.ctx.calls.some(x=>x.key==='stroke'));
+  }
+});
+check('three boss silhouettes render every windup and recovery without changing battle state', () => {
+  for(const reduced of [false,true]) for(const bossId of ['duelist','archer','colossus']) for(const type of ['idle','volley','sidestep','sweep','rush','leap','ring','thrust','cross','cleave','feint','geyser','recoil']) for(const ratio of [0,.4,.9,1]) {
+    const g=new Scene(reduced);g.bossId=bossId;g.armor=2;g.armorOpen=0;
+    g.attack=type==='idle'||type==='recoil'?null:{type,angle:1.2,elapsed:ratio,duration:1,red:['leap','ring','cleave','geyser'].includes(type)};
+    g.bossPose={action:type,age:ratio*.4,duration:.4,angle:1.2};draw(g,()=>g.drawBoss());
+    g.attack=null;draw(g,()=>g.drawBoss());
+    assert.ok(g.ctx.calls.some(x=>x.key==='fill'),'each boss has a filled silhouette');
+  }
+  const shapes=['duelist','archer','colossus'].map(bossId=>{const g=new Scene();g.bossId=bossId;draw(g,()=>g.drawBoss());return g.ctx.calls;});
+  assert.notDeepEqual(shapes[0],shapes[1]);assert.notDeepEqual(shapes[1],shapes[2]);assert.notDeepEqual(shapes[0],shapes[2]);
+});
+check('colossus rune slabs disappear and the exposed core changes when armor breaks', () => {
+  const traces=[];
+  for(const [armor,armorOpen] of [[2,0],[1,0],[0,8]]) {
+    const g=new Scene(true);g.bossId='colossus';g.armor=armor;g.armorOpen=armorOpen;draw(g,()=>g.drawBoss());traces.push(g.ctx.calls);
+  }
+  assert.notDeepEqual(traces[0],traces[1]);assert.notDeepEqual(traces[1],traces[2]);
+  assert.ok(traces[2].some(x=>x.key==='arc'&&x.args[2]===84),'exposed armor has an essential visual ring in gentle mode');
+});
+check('bamboo and forge arenas have distinct palettes and retain their visible boundary', () => {
+  const traces=[];
+  for(const reduced of [false,true]) for(const sceneId of ['rain','bamboo','forge']) {
+    const g=new Scene(reduced);g.sceneId=sceneId;draw(g,()=>g.drawArena());
+    assert.ok(g.ctx.calls.some(x=>x.key==='fillRect'&&x.args[2]===720&&x.args[3]===720));
+    if(sceneId!=='rain') {
+      assert.ok(g.ctx.calls.some(x=>x.key==='arc'&&x.args[0]===360&&x.args[1]===363&&x.args[2]===291),'walkable boundary remains visible');
+      if(reduced) traces.push(g.ctx.calls.filter(x=>x.key==='gradientStop'));
+    }
+    assert.ok(g.ctx.calls.length<1300,'bounded scene rendering');
+  }
+  assert.notDeepEqual(traces[0],traces[1]);
+});
+check('volley telegraphs show all three true collision capsules in gentle and normal modes', () => {
+  const lanes=[{x:100,y:200,ex:600,ey:200},{x:100,y:270,ex:600,ey:270},{x:100,y:340,ex:600,ey:340}];
+  for(const reduced of [false,true]) {
+    const g=new Scene(reduced);draw(g,()=>g.drawTell({type:'volley',lanes,halfWidth:23,x:100,y:270,angle:0,elapsed:.95,duration:1,red:false}));
+    for(const lane of lanes) {
+      assert.ok(g.ctx.calls.some(x=>x.key==='arc'&&x.args[0]===lane.ex&&x.args[1]===lane.ey&&x.args[2]===23&&x.args[3]===-Math.PI/2));
+      assert.ok(g.ctx.calls.some(x=>x.key==='arc'&&x.args[0]===lane.x&&x.args[1]===lane.y&&x.args[2]===23&&x.args[3]===Math.PI/2));
+    }
+    assert.ok(g.ctx.calls.filter(x=>x.key==='fill').length>=3,'all three lanes are filled warnings');
+  }
+});
+check('sidestep shot shows its single wider collision capsule after repositioning', () => {
+  for(const reduced of [false,true]) {
+    const lane={x:220,y:190,ex:220,ey:690},halfWidth=34;
+    const g=new Scene(reduced);g.bossId='archer';g.boss.x=lane.x;g.boss.y=lane.y;
+    draw(g,()=>g.drawTell({type:'sidestep',lanes:[lane],halfWidth,x:lane.x,y:lane.y,angle:Math.PI/2,elapsed:1.2,duration:1.35,red:false}));
+    const caps=g.ctx.calls.filter(x=>x.key==='arc'&&x.args[2]===halfWidth);
+    assert.equal(caps.length,2,'one shot has exactly two rounded collision caps');
+    assert.ok(caps.some(x=>x.args[0]===lane.x&&x.args[1]===lane.y&&x.args[3]===Math.PI));
+    assert.ok(caps.some(x=>x.args[0]===lane.ex&&x.args[1]===lane.ey&&x.args[3]===0));
+    assert.ok(g.ctx.calls.some(x=>x.key==='moveTo'&&x.args[0]===lane.x+halfWidth));
   }
 });
 console.log(`Duel art checks: ${passed} groups passed.`);

@@ -52,7 +52,8 @@ const context2d = new Proxy({
 }, { get: (object, key) => key in object ? object[key] : () => {} });
 const elements = Object.fromEntries(ids.map(id => [id, new Element(id)]));
 const panelButtons = {
-  'start-screen': ['start'],
+  'start-screen': ['start', 'practice'],
+  'intermission-screen': ['continue-heal', 'continue-power', 'exit-intermission'],
   'pause-screen': ['resume', 'restart-paused', 'help-paused', 'exit-paused'],
   'result-screen': ['restart', 'return-title'],
   'help-screen': ['close-help']
@@ -102,6 +103,9 @@ function ok(value, message) { assert(value, message); checks++; }
 
 ok(!elements['start-screen'].hidden && elements['control-deck'].inert, 'title controls inert');
 elements.start.fire('click');
+ok(game.snapshot().challenge && game.snapshot().stageCount === 3, 'primary action starts three boss challenge');
+elements.home.fire('click'); elements.practice.fire('click');
+ok(!game.snapshot().challenge, 'practice is explicit single fight');
 ok(game.state === 'playing' && !elements['control-deck'].inert, 'start playable');
 down('W'); ok(game.input.y === -1, 'uppercase movement');
 up('w'); ok(game.input.y === 0, 'lowercase keyup clears uppercase');
@@ -209,4 +213,28 @@ const beforeMute = audioTrace.length;
 elements.sound.fire('click'); game.emit('sound', 'parry');
 ok(audioTrace.length === beforeMute, 'muting stops newly requested combat audio');
 ok(html.indexOf('duel-art.js') < html.indexOf('engine.js'), 'animation module loads before the engine');
+// Transition fixtures finish bosses through the public damage API to verify UI routing,
+// focus/input cleanup and records. Strategy-driven full runs live in gauntlet simulation.
+elements.home.fire('click'); elements.start.fire('click'); tick(.05);
+ok(elements['stage-caption'].textContent.includes('1 / 3') && elements['boss-name'].textContent === game.snapshot().bossName, 'challenge HUD identifies current realm and boss');
+down('d'); down('j'); game.player.hp = 60; game.damageBoss(game.boss.hp, 0);
+ok(game.state === 'intermission' && !elements['intermission-screen'].hidden && elements['control-deck'].inert, 'stage victory opens rest choices without a terminal result');
+ok(!game.attackHeld && game.input.x === 0 && elements['heal-detail'].textContent.includes(String(Math.min(32, 100 - game.player.hp))), 'rest clears all inputs and shows actual capped healing');
+const restTime = game.time; for (let i = 0; i < 25; i++) tick(.05); down('j'); down('k');
+ok(game.time === restTime && !game.attackHeld && game.stats.parries === 0, 'rest clock and combat actions stay frozen');
+elements['exit-intermission'].focus(); const restTab = down('Tab');
+ok(restTab.prevented && document.activeElement === elements['continue-heal'], 'rest choices form a keyboard focus loop');
+elements['continue-power'].fire('click'); up('j'); up('d'); tick(.05);
+ok(game.state === 'playing' && game.snapshot().stageNumber === 2 && game.snapshot().bossId === 'archer' && game.snapshot().powerBonus === .12, 'power choice advances to a distinct second boss');
+ok(!game.attackHeld && game.input.x === 0 && elements['intermission-screen'].hidden, 'next realm never inherits held combat input');
+game.player.hp = 45; game.damageBoss(game.boss.hp, 0);
+ok(elements['intermission-title'].textContent === game.snapshot().nextBoss.name && elements['heal-detail'].textContent.includes('32'), 'next boss and full healing choice update after second stage');
+const expectedHealed = Math.min(100, game.player.hp + 32); elements['continue-heal'].fire('click'); tick(.05);
+ok(game.snapshot().stageNumber === 3 && game.player.hp === expectedHealed && elements['bottom-caption'].textContent.includes('满蓄破甲'), 'heal choice carries restored health into final armor fight');
+game.finish(false, '倒在潮声里');
+ok(elements['result-title'].textContent === '止步第 3 境' && elements['restart'].innerHTML.includes('重闯三境'), 'failed challenge explains progress and retry scope');
+elements.restart.fire('click');
+ok(game.snapshot().stageNumber === 1 && game.snapshot().powerBonus === 0 && game.player.hp === 100, 'challenge retry starts a fresh full run');
+for (let stage = 0; stage < 3; stage++) { game.damageBoss(game.boss.hp, 0); if (stage < 2) elements['continue-power'].fire('click'); }
+ok(game.state === 'won' && elements['result-title'].textContent === '三境，尽破' && stored['nightfall-best-gauntlet'], 'final clear presents the whole challenge result in its own record');
 console.log('Active UI integration checks passed:', checks);
