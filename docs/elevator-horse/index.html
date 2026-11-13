@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f3e8">
+  <meta name="description" content="电梯里禁止变成马：门开装人，门关发疯。30秒手机小游戏，点开就能玩。">
+  <title>电梯里禁止变成马 · 手机试玩</title>
+  <style>
+    *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#e7e3d7;font-family:system-ui,-apple-system,"Microsoft YaHei",sans-serif}
+    body{display:flex;justify-content:center}canvas{display:block;width:min(100vw,520px);height:100vh;height:100dvh;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;outline:none;background:#f6f3e8}
+    #safe-insets{position:fixed;visibility:hidden;pointer-events:none;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+    #share-panel[hidden]{display:none}#share-panel{position:fixed;inset:0;background:#29282fcc;display:grid;place-items:center;padding:20px;z-index:10}
+    .sheet{width:min(100%,400px);padding:24px;border-radius:18px;background:#f6f3e8;color:#29282f;box-shadow:0 15px 50px #0003}.sheet h2{margin:0 0 10px;font-size:22px}.sheet p{line-height:1.5;font-size:14px}
+    textarea{display:block;width:100%;min-height:130px;resize:vertical;border:1px solid #b9bcb4;border-radius:8px;background:white;padding:12px;font:14px/1.6 system-ui;user-select:text;-webkit-user-select:text}
+    button{width:100%;min-height:46px;margin-top:15px;border:1px solid #29282f;border-radius:10px;background:#d8f45b;color:#29282f;font-size:16px;font-weight:600}
+  </style>
+</head>
+<body>
+  <div id="safe-insets" aria-hidden="true"></div>
+  <canvas id="game" tabindex="0" aria-label="电梯里禁止变成马。点击进入电梯；门开前按住场景装人，门关后松手做马。"></canvas>
+  <section id="share-panel" role="dialog" aria-modal="true" aria-labelledby="share-title" hidden>
+    <div class="sheet"><h2 id="share-title">发给朋友一起玩</h2><p>长按下方文字，复制挑战链接后发到微信。</p><textarea id="share-text" aria-label="挑战链接与战绩" readonly></textarea><button id="close-share">返回游戏</button></div>
+  </section>
+  <script src="game.js?v=c48c45d34c56"></script>
+</body>
+</html>
