@@ -1,0 +1,8 @@
+{
+  "description": "惊雷·断潮60秒主动战斗原创试玩",
+  "projectname": "惊雷断潮60秒",
+  "appid": "touristappid",
+  "compileType": "game",
+  "setting": { "es6": true, "minified": true, "urlCheck": true },
+  "libVersion": "latest"
+}
