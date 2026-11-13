@@ -1,0 +1,31 @@
+name: Thunderblade checks
+
+on:
+  push:
+    paths: ['games/thunderblade/**', '.github/workflows/thunderblade-checks.yml']
+  pull_request:
+    paths: ['games/thunderblade/**', '.github/workflows/thunderblade-checks.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: games/thunderblade
+    env:
+      THUNDERBLADE_OUTPUT_DIR: ${{ runner.temp }}/thunderblade-deliverables
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm test
+
