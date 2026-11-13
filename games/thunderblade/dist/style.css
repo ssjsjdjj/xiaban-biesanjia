@@ -194,3 +194,9 @@
 .tell.opening{color:#c9f2d7;border-color:#82bf9e77;background:#14352aa8}
 #bottom-caption{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:370px){.enemy-name{gap:5px}.enemy-name .boss-style{font-size:6px;padding:1px 3px;letter-spacing:0;max-width:49px}}
+
+/* Continuous challenge: compact rest choices keep the established thumb deck stable. */
+.rest-status{color:var(--gold);font-size:10px;line-height:1.8;padding:10px 0;border-block:1px solid #6b755044;width:100%}.rest-choice-note{font-size:9px;color:#8fa99d;margin:12px 0 9px}.rest-choice{width:100%;max-width:284px;padding:12px 14px;min-height:54px;display:flex;flex-direction:column;gap:6px;text-align:left;border:1px solid #7c9a7f;background:#24433d;color:#dce9d2;margin:0 0 10px}.rest-choice b{font-size:13px;font-weight:500;letter-spacing:1px}.rest-choice span{font-size:9px;color:#a6bdaa}.rest-choice.power-choice{border-color:#a68a5f;background:#3a3526}.rest-choice:hover{filter:brightness(1.13)}.intermission-screen .modal-desc{margin-bottom:12px}.practice-button{min-height:32px;padding:12px 10px 0}.enemy-name #boss-name{white-space:nowrap}.start-screen .start-controls{margin-top:8px}
+@media(max-width:999px) and (max-height:680px){.intermission-screen .modal-content h2{font-size:22px;margin:6px 0}.intermission-screen .modal-kicker{letter-spacing:1px}.intermission-screen .modal-desc{font-size:9px;line-height:1.6;margin-bottom:6px}.rest-status{font-size:8px;padding:5px 0}.rest-choice-note{font-size:8px;margin:7px 0}.rest-choice{min-height:44px;padding:8px 11px;gap:4px;margin-bottom:7px}.rest-choice b{font-size:11px}.rest-choice span{font-size:8px}.intermission-screen .under-button{padding-top:5px}.practice-button{min-height:25px;padding-top:7px;font-size:8px}.enemy-name .boss-style{display:none}}
+
+.frame-bottom>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.frame-bottom>div{flex-shrink:0}

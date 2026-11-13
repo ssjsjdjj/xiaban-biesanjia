@@ -4,48 +4,50 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0a171c">
-  <meta name="description" content="惊雷·断潮：60秒主动首领战。蓄力出刀、看准格挡、破防处决。原创动作试玩。">
-  <title>惊雷 · 断潮 — 连战完善版</title>
+  <meta name="description" content="惊雷·断潮：三首领连续挑战。雨庭弹反、竹海走位、熔炉破甲。原创动作试玩。">
+  <title>惊雷 · 断潮 — 三境连战</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230d242c'/%3E%3Cpath d='M39 5 15 37h16l-5 23 24-33H34z' fill='%23e3c38e'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="style.css?v=d10ff6ee1228">
+  <link rel="stylesheet" href="style.css?v=e7890fd0e4c7">
 </head>
 <body>
   <div class="site-shell">
     <header class="site-header">
       <a id="home" class="brand" href="#" aria-label="惊雷断潮首页"><span class="brand-mark">ϟ</span><span>惊雷 <i>/</i> 断潮</span></a>
-      <div class="header-right"><span class="edition"><i></i> 连战完善版</span><button id="help-top" class="text-button">玩法说明 ↗</button></div>
+      <div class="header-right"><span class="edition"><i></i> 三境连战</span><button id="help-top" class="text-button">玩法说明 ↗</button></div>
     </header>
     <main class="experience">
       <section class="intro">
-        <p class="eyebrow">SIXTY SECONDS / ONE DUEL</p>
+        <p class="eyebrow">THREE BOSSES / ONE JOURNEY</p>
         <h1>刀出，<br><em>潮断。</em></h1>
         <p class="poem">潮声之下，<br>只听你拔刀的那一刻。</p>
         <div class="intro-rule"></div>
-        <p class="intro-note">这一次，每一刀由你决定。<br>六十秒，击溃断潮之主。</p>
+        <p class="intro-note">雨庭、竹海、熔炉。<br>三种打法，一路断潮。</p>
         <div class="intro-bottom"><span class="seal">断<br>潮</span><p>THUNDERBLADE<br><small>THE TIDE BREAKER</small></p></div>
       </section>
-      <section class="game-column" aria-label="60秒首领战">
-        <div class="frame-caption"><span>壹 · 断潮台</span><span id="frame-state">等待拔刀</span></div>
+      <section class="game-column" aria-label="三首领连续挑战">
+        <div class="frame-caption"><span id="stage-caption">三境连战 · 每场60秒</span><span id="frame-state">等待拔刀</span></div>
         <div class="battle-shell" id="battle-shell">
           <div class="battle-hud" id="hud">
-            <div class="duel-status"><div class="you-status"><span class="hud-label">守夜人 <b id="hp-text">100 / 100</b></span><div class="meter hp-meter"><i id="health-fill"></i></div></div><div class="countdown"><strong id="timer">60<span>.0</span></strong><small>秒 / 限时决斗</small></div><button id="pause" class="pause-button" aria-label="暂停游戏" disabled>Ⅱ</button></div>
-            <div class="enemy-status"><div class="enemy-name"><span>魇将 · 断潮</span><small id="phase">一式 · 试锋</small><small id="boss-style" class="boss-style" hidden></small><b id="boss-health-text">100%</b></div><div class="meter boss-meter"><i id="boss-fill"></i></div><div class="posture-row"><span id="posture-label">架势</span><div class="meter posture-meter"><i id="posture-fill"></i></div><small id="posture-text">0 / 100</small></div></div>
+            <div class="duel-status"><div class="you-status"><span class="hud-label">守夜人 <b id="hp-text">100 / 100</b></span><div class="meter hp-meter"><i id="health-fill"></i></div></div><div class="countdown"><strong id="timer">60<span>.0</span></strong><small id="timer-mode">秒 / 本场上限</small></div><button id="pause" class="pause-button" aria-label="暂停游戏" disabled>Ⅱ</button></div>
+            <div class="enemy-status"><div class="enemy-name"><span id="boss-name">雨庭 · 逐影</span><small id="phase">一式 · 试锋</small><small id="boss-style" class="boss-style" hidden></small><b id="boss-health-text">100%</b></div><div class="meter boss-meter"><i id="boss-fill"></i></div><div class="posture-row"><span id="posture-label">架势</span><div class="meter posture-meter"><i id="posture-fill"></i></div><small id="posture-text">0 / 100</small></div></div>
           </div>
           <div class="arena-wrap" id="arena-wrap">
             <canvas id="game" width="720" height="720" tabindex="0" aria-label="战斗场景。WASD移动，J按住蓄力松开出刀，K格挡，空格闪避，E处决"></canvas>
             <div class="arena-corner corner-tl"></div><div class="arena-corner corner-tr"></div><div class="arena-corner corner-bl"></div><div class="arena-corner corner-br"></div>
             <div class="fight-cues" id="fight-cues" hidden><div class="tell" id="attack-tell">观察首领起手</div><div id="battle-feedback" class="battle-feedback" role="status" hidden></div><div class="context-hint" id="context-hint">按住出刀蓄力 · 松开重斩</div></div>
             <div class="overlay start-screen" id="start-screen" role="dialog" aria-modal="true" aria-label="开始决斗">
-              <div class="start-kicker">60秒 · 主动首领战</div>
+              <div class="start-kicker">三位首领 · 连续挑战</div>
               <h2 class="start-title">惊雷<span>断潮</span></h2>
-              <p class="start-poem">刀路会变，见招再出刀。</p>
+              <p class="start-poem">雨庭见招，竹海逐风，熔炉破甲。</p>
               <div class="start-rules"><span><i class="gold-dot"></i>金色起手 · 格挡</span><span><i class="red-dot"></i>红色危招 · 闪避</span></div>
-              <button class="primary-button" id="start">拔刀 · 开始决斗 <b>→</b></button>
+              <button class="primary-button" id="start">拔刀 · 开始三境连战 <b>→</b></button>
+              <button class="under-button practice-button" id="practice">先练一场 · 60秒剑客</button>
               <p id="start-controls" class="start-controls">J按住蓄力、松开出刀 · K格挡 · 空格闪避</p>
             </div>
             <div class="overlay" id="pause-screen" role="dialog" aria-modal="true" aria-label="暂停菜单" hidden><div class="modal-content"><p class="modal-kicker">刀锋暂歇 / PAUSED</p><h2>喘息一瞬</h2><p id="pause-stats" class="modal-desc"></p><button class="primary-button" id="resume">继续决斗 <b>→</b></button><div class="modal-options"><button class="under-button" id="restart-paused">重新挑战</button><button class="under-button" id="help-paused">查看招式</button><button class="under-button" id="exit-paused">返回题名</button></div></div></div>
+            <div class="overlay intermission-screen" id="intermission-screen" role="dialog" aria-modal="true" aria-label="场间整备" hidden><div class="modal-content"><p class="modal-kicker" id="intermission-kicker">一境已破 / REST</p><h2 id="intermission-title">下一境</h2><p class="modal-desc" id="intermission-desc"></p><div class="rest-status" id="intermission-status"></div><p class="rest-choice-note">选一项整备，带着当前气血继续</p><button class="rest-choice" id="continue-heal"><b>调息 · 回血</b><span id="heal-detail"></span></button><button class="rest-choice power-choice" id="continue-power"><b>砺刃 · 伤害 +12%</b><span id="power-detail"></span></button><button class="under-button" id="exit-intermission">结束挑战 · 返回题名</button></div></div>
             <div class="overlay" id="result-screen" role="dialog" aria-modal="true" aria-label="决斗结果" hidden><div class="modal-content"><p class="modal-kicker" id="result-kicker"></p><h2 id="result-title"></h2><p id="result-desc" class="modal-desc"></p><div class="result-stats"><div><b id="result-parries">0</b><span>完美格挡</span></div><div><b id="result-executions">0</b><span>破防处决</span></div><div><b id="result-score">0</b><span>本局战绩</span></div></div><p class="best-score" id="best-score"></p><button class="primary-button" id="restart">再战一次 <b>→</b></button><button class="under-button" id="return-title">返回题名</button></div></div>
-            <div class="overlay help-screen" id="help-screen" role="dialog" aria-modal="true" aria-label="战斗操作说明" hidden><div class="help-content"><p class="modal-kicker">出刀之前 / COMBAT GUIDE</p><h2>读招，再出刀</h2><div class="help-row"><b>01</b><div><h3>轻斩与蓄力</h3><p>点击「出刀」快速斩击；按住约半秒，松开重斩。电脑按 J。靠近首领才能命中。</p></div></div><div class="help-row"><b>02</b><div><h3>金色格挡，红色闪避</h3><p>金色攻击将落下时点「格挡」或 K，精准反击。红色危招用「闪避」或空格避开。</p></div></div><div class="help-row"><b>03</b><div><h3>打满架势，破防处决</h3><p>斩击与格挡积累架势。首领破防后，「出刀」变为处决，点击或按 E 抓住机会。</p></div></div><p class="help-foot">左侧摇杆 / WASD移动 · P或Esc暂停<br>切到后台自动暂停 · 60秒内击败首领</p><button class="primary-button" id="close-help">记住了 <b>→</b></button></div></div>
+            <div class="overlay help-screen" id="help-screen" role="dialog" aria-modal="true" aria-label="战斗操作说明" hidden><div class="help-content"><p class="modal-kicker">出刀之前 / COMBAT GUIDE</p><h2>读招，再出刀</h2><div class="help-row"><b>01</b><div><h3>轻斩与蓄力</h3><p>点击「出刀」快速斩击；按住约半秒，松开重斩。电脑按 J。靠近首领才能命中。</p></div></div><div class="help-row"><b>02</b><div><h3>金色格挡，红色闪避</h3><p>金色攻击将落下时点「格挡」或 K，精准反击。红色危招用「闪避」或空格避开。</p></div></div><div class="help-row"><b>03</b><div><h3>打满架势，破防处决</h3><p>斩击与格挡积累架势。首领破防后，「出刀」变为处决，点击或按 E 抓住机会。</p></div></div><p class="help-foot">左侧摇杆 / WASD移动 · P或Esc暂停<br>切到后台自动暂停 · 每场60秒，胜后选回血或强化</p><button class="primary-button" id="close-help">记住了 <b>→</b></button></div></div>
           </div>
           <div class="control-deck" id="control-deck" inert>
             <div class="move-pad" id="move-pad" role="group" aria-label="左侧移动摇杆，拖动走位">
@@ -58,19 +60,19 @@
         <div class="frame-bottom"><span id="bottom-caption">每一刀，都由你决定</span><div><button class="text-button" id="effects" aria-pressed="true">特效：标准</button><button id="sound" class="text-button" aria-pressed="false">声音：关</button></div></div>
       </section>
       <aside class="field-notes">
-        <div class="notes-heading"><span>三式破潮</span><small>COMBAT NOTES / 01</small></div>
-        <div class="note"><span class="note-index">壹</span><div><h3>蓄势，重斩</h3><p>轻斩灵活，重斩破势。<br>看准空隙，再落下一刀。</p></div></div>
-        <div class="note"><span class="note-index">贰</span><div><h3>格挡，反击</h3><p>迎上金色刀锋的一瞬，<br>将危险化作破防的机会。</p></div></div>
-        <div class="note"><span class="note-index">叁</span><div><h3>破防，处决</h3><p>打满首领架势，趁势终结。<br>刀势随三阶段不断变化。</p></div></div>
+        <div class="notes-heading"><span>三式破潮</span><small>THREE REALMS / 03</small></div>
+        <div class="note"><span class="note-index">壹</span><div><h3>雨庭 · 逐影</h3><p>金光将满，迎刀弹反。<br>连势末刀后，近身追击。</p></div></div>
+        <div class="note"><span class="note-index">贰</span><div><h3>竹海 · 鸣弦</h3><p>横向走位，避开箭道。<br>弹反回箭，抓收弓空隙。</p></div></div>
+        <div class="note"><span class="note-index">叁</span><div><h3>熔炉 · 负岳</h3><p>两次满蓄，击碎重甲。<br>八秒破甲，倾力追击。</p></div></div>
         <div class="keyboard-note"><span>电脑操作</span><div><kbd>J</kbd><small>蓄力 / 出刀</small></div><div><kbd>K</kbd><small>格挡</small><kbd>空格</kbd><small>闪避</small></div><div><kbd>E</kbd><small>破防处决</small><kbd>P</kbd><small>暂停</small></div></div>
-        <div class="record"><span>本机最佳 · 六十秒决斗</span><b id="record">—</b><small>战绩保存在当前浏览器</small></div>
+        <div class="record"><span id="record-label">本机最佳 · 三境连战</span><b id="record">—</b><small>战绩保存在当前浏览器</small></div>
       </aside>
     </main>
-    <footer><span>原创动作试玩 · 单场60秒</span><span>听潮，见招，拔刀 <i>↗</i></span></footer>
+    <footer><span>原创动作试玩 · 三首领连续挑战</span><span>听潮，见招，拔刀 <i>↗</i></span></footer>
   </div>
-  <script src="duel-art.js?v=57ed59e6cacd"></script>
-  <script src="engine.js?v=b1d35f5fcab2"></script>
-  <script src="ui.js?v=d6135c764505"></script>
+  <script src="duel-art.js?v=517498b53189"></script>
+  <script src="engine.js?v=a876820d7993"></script>
+  <script src="ui.js?v=2eaf6c264b5d"></script>
 </body>
 </html>
 

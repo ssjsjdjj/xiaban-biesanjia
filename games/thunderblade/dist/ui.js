@@ -2,12 +2,12 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const canvas = $('game');
-  const panels = ['start-screen', 'pause-screen', 'result-screen', 'help-screen'];
+  const panels = ['start-screen', 'pause-screen', 'result-screen', 'help-screen', 'intermission-screen'];
   const clamp = (n, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, Number(n) || 0));
   const read = (key, fallback) => { try { const value = localStorage.getItem(key); return value === null ? fallback : JSON.parse(value); } catch (_) { return fallback; } };
   const save = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) {} };
   const touchLayout = () => window.matchMedia('(pointer:coarse)').matches || window.innerWidth <= 760;
-  let best = Math.max(0, Number(read('nightfall-best-active60', 0)) || 0);
+  let best = Math.max(0, Number(read('nightfall-best-gauntlet', 0)) || 0);
   let soundOn = read('nightfall-sound', false) === true;
   let effectsOn = read('nightfall-effects', !window.matchMedia('(prefers-reduced-motion: reduce)').matches) === true;
   let game, audio, noiseBuffer, audioVoices = 0, audioAttempt = 0, activePanel = 'start-screen', helpReturn = 'start-screen', helpFocus = null;
@@ -16,7 +16,7 @@
   let movePointer = null, moveStart = null, moveTarget = null, stick = { x: 0, y: 0 }, keyAttack = false;
   const actionPointers = new Map();
   const keys = new Set();
-  const record = () => $('record').textContent = best ? best.toLocaleString() : '—';
+  const record = () => { $('record').textContent = best ? best.toLocaleString() : '—'; $('record-label').textContent = !game || game.state === 'menu' || game.snapshot().challenge ? '本机最佳 · 三境连战' : '本机最佳 · 单场练习'; };
   function settings() {
     $('sound').textContent = '声音：' + (soundOn ? '开' : '关'); $('sound').setAttribute('aria-pressed', String(soundOn));
     $('effects').textContent = '特效：' + (effectsOn ? '标准' : '柔和'); $('effects').setAttribute('aria-pressed', String(effectsOn));
@@ -163,11 +163,14 @@
     $('boss-fill').style.width = bossPct * 100 + '%'; $('boss-health-text').textContent = Math.ceil(bossPct * 100) + '%';
     $('phase').textContent = s.phaseName || ['一式 · 试锋', '二式 · 逐浪', '终式 · 断潮'][clamp(s.phase, 1, 3) - 1];
     const styleChosen = Boolean(s.styleName && s.state !== 'menu');
-    $('boss-style').hidden = !styleChosen;
+    $('boss-style').hidden = !styleChosen || Boolean(s.challenge);
     $('boss-style').textContent = s.styleName || '';
     $('boss-style').setAttribute('title', s.styleHint || '');
-    $('bottom-caption').textContent = styleChosen ? '本局刀路 · ' + s.styleName : '每一刀，都由你决定';
-    $('bottom-caption').setAttribute('title', s.styleHint || '');
+    $('boss-name').textContent = s.bossName || '魇将 · 断潮';
+    $('stage-caption').textContent = s.challenge ? `第 ${s.stageNumber} / ${s.stageCount} 境 · ${s.sceneName}` : s.state === 'menu' ? '三境连战 · 每场60秒' : '单场练习 · 60秒';
+    $('timer-mode').textContent = s.challenge ? `秒 / 第${s.stageNumber}境` : s.state === 'menu' ? '秒 / 三境连战' : '秒 / 单场练习';
+    $('bottom-caption').textContent = s.challenge ? s.bossId === 'colossus' ? s.armorOpen > 0 ? `破甲追击 · 余 ${s.armorOpen.toFixed(1)}秒` : `满蓄破甲 · 还需 ${s.armor || 0} 次` : s.bossHint : styleChosen ? '本局刀路 · ' + s.styleName : '每一刀，都由你决定';
+    $('bottom-caption').setAttribute('title', s.bossHint || s.styleHint || '');
     $('posture-fill').style.width = clamp(s.posture / 100) * 100 + '%';
     $('posture-text').textContent = s.broken > 0 ? s.broken.toFixed(1) + '秒' : s.postureLock > 0 ? s.postureLock.toFixed(1) + '秒' : `${Math.round(s.posture || 0)} / 100`;
     $('posture-label').textContent = s.broken > 0 ? '破防' : s.postureLock > 0 ? '稳势' : '架势'; $('posture-label').parentElement.classList.toggle('broken', s.broken > 0);
@@ -186,15 +189,16 @@
     $('attack-tell').textContent = [s.pressureName || s.attackName || '观察首领起手', s.attackCombo].filter(Boolean).join(' · ');
     $('attack-tell').classList.toggle('danger', Boolean(s.danger));
     $('attack-tell').classList.toggle('opening', s.punish > 0 && !s.danger && !broken);
-    $('context-hint').textContent = broken ? '首领破防！点击「处决」或 E' : s.attackName === '处决' ? '断潮处决 · 刀势未尽' : s.parryNow ? '现在格挡！迎住金色刀锋' : s.dodgeNow ? '现在闪避！避开红色危招' : s.riposte > 0 ? '弹反成功！下一刀强化 · 趁势反击' : s.punish > 0 ? '首领收势 · 轻斩连击或蓄力重斩追击' : s.hint || '按住蓄力，松开重斩 · 金色格挡 / 红色闪避';
+    $('context-hint').textContent = broken ? '首领破防！点击「处决」或 E' : s.attackName === '处决' ? '断潮处决 · 刀势未尽' : s.parryNow ? s.bossId === 'archer' ? '现在格挡！弹回金色箭矢' : '现在格挡！迎住金色刀锋' : s.dodgeNow ? '现在闪避！避开红色危招' : s.riposte > 0 ? '弹反成功！下一刀强化 · 趁势反击' : s.punish > 0 ? '首领收势 · 轻斩连击或蓄力重斩追击' : s.hint || '按住蓄力，松开重斩 · 金色格挡 / 红色闪避';
     $('context-hint').classList.toggle('execution', broken);
   }
   function renderResult(data) {
     const stats = data.stats || {};
-    best = Math.max(best, Number(data.score) || 0); save('nightfall-best-active60', best); record();
+    const recordKey = data.challenge ? 'nightfall-best-gauntlet' : 'nightfall-best-active60';
+    best = Math.max(Number(read(recordKey, 0)) || 0, Number(data.score) || 0); save(recordKey, best); record();
     const styleName = data.styleName || game?.snapshot().styleName || '';
     $('result-kicker').textContent = (data.win ? '潮落 / VICTORY' : '再来一刀 / TRY AGAIN') + (styleName ? ' · ' + styleName : '');
-    $('result-title').textContent = data.win ? '一刀，断潮' : data.reason === 'timeout' || data.time >= 60 ? '潮声未歇' : '刀锋暂折';
+    $('result-title').textContent = data.challenge ? data.win ? '三境，尽破' : `止步第 ${Math.min((data.cleared || 0) + 1, data.stageCount || 3)} 境` : data.win ? '一刀，断潮' : data.reason === 'timeout' || data.time >= 60 ? '潮声未歇' : '刀锋暂折';
     const dealt = Math.round((1 - clamp(data.bossHp / data.bossMax)) * 100);
     let review;
     if (!stats.hits) review = '靠近首领，先试轻斩三连。';
@@ -203,9 +207,10 @@
     else if (!stats.weakHits) review = '整套连势结束后，抓收势空隙追击。';
     else if (!stats.counters) review = '弹反后接下一刀，吃满强化追击。';
     else review = stats.maxCombo >= 3 ? '连斩与反击都已接上，下一局留意不同刀路。' : '轻斩第三刀更强，可在收势时补完整段。';
-    $('result-desc').textContent = (data.win ? `用时 ${Number(data.time).toFixed(1)} 秒 · 余下 ${Math.ceil(data.hp || 0)} 点气血。` : `压制首领 ${dealt}% · ${data.reason === 'timeout' || data.time >= 60 ? '六十秒已到' : '气血耗尽'}。`) + review;
+    $('result-desc').textContent = (data.challenge ? `已破 ${data.cleared || 0} / ${data.stageCount || 3} 境 · 累计 ${Number(data.time).toFixed(1)} 秒 · ${Math.ceil(data.hp || 0)} 点气血。` : data.win ? `用时 ${Number(data.time).toFixed(1)} 秒 · 余下 ${Math.ceil(data.hp || 0)} 点气血。` : `压制首领 ${dealt}% · ${data.reason === 'timeout' || data.time >= 60 ? '六十秒已到' : '气血耗尽'}。`) + review;
     $('result-parries').textContent = stats.parries || 0; $('result-executions').textContent = stats.executions || 0; $('result-score').textContent = (Number(data.score) || 0).toLocaleString();
-    $('best-score').textContent = `本机最佳 ${best.toLocaleString()} · 命中 ${stats.hits || 0} 次` + (stats.weakHits ? ` · 破绽追击 ${stats.weakHits} 次` : '');
+    $('restart').innerHTML = data.challenge ? '重闯三境 <b>→</b>' : '再练一场 <b>→</b>';
+    $('best-score').textContent = `${data.challenge ? '连战' : '练习'}最佳 ${best.toLocaleString()} · 命中 ${stats.hits || 0} 次` + (stats.weakHits ? ` · 破绽追击 ${stats.weakHits} 次` : '');
     $('frame-state').textContent = data.win ? '潮落，天明' : '等待再战';
     show('result-screen');
   }
@@ -216,9 +221,22 @@
     else if (type === 'start' || type === 'resume') { show(null); $('frame-state').textContent = '决斗进行中'; }
     else if (type === 'pause') { $('pause-stats').textContent = game ? `还剩 ${Math.max(0, game.snapshot().remaining).toFixed(1)} 秒 · 出刀之前，看准起手` : ''; show('pause-screen'); $('frame-state').textContent = '战斗已暂停'; }
     else if (type === 'result') renderResult(data);
+    else if (type === 'intermission') renderIntermission(data || game.snapshot());
   }});
-  function begin() { clearInput(); feedbackUntil = 0; $('battle-feedback').hidden = true; initAudio(); game.start(); renderHud(game.snapshot()); show(null); }
-  function home() { clearInput(); game.home(); $('frame-state').textContent = '等待拔刀'; show('start-screen'); renderHud(game.snapshot()); }
+  function begin(challenge = true) { clearInput(); feedbackUntil = 0; $('battle-feedback').hidden = true; initAudio(); if (challenge) game.startChallenge(); else game.start(); renderHud(game.snapshot()); show(null); }
+  function restart() { begin(Boolean(game.snapshot().challenge)); }
+  function renderIntermission(s) {
+    const next = s.nextBoss || {}; feedbackUntil = 0; $('battle-feedback').hidden = true;
+    $('intermission-kicker').textContent = `已破 ${s.cleared} / ${s.stageCount} 境 · 场间整备`;
+    $('intermission-title').textContent = next.name || '下一境';
+    $('intermission-desc').textContent = [next.sceneName, next.hint].filter(Boolean).join(' · ');
+    $('intermission-status').textContent = `气血 ${Math.ceil(s.hp)} / ${s.maxHp} · 累计 ${s.totalTime.toFixed(1)} 秒 · 强化 +${Math.round((s.powerBonus || 0) * 100)}%`;
+    $('heal-detail').textContent = `恢复 ${Math.min(32, s.maxHp - s.hp)} 点气血 → ${Math.min(s.maxHp, s.hp + 32)} / ${s.maxHp}`;
+    $('power-detail').textContent = `余下战斗持续生效 · 总强化 +${Math.round(((s.powerBonus || 0) + .12) * 100)}%`;
+    $('frame-state').textContent = '首领已击败 · 选择整备'; renderHud(s); show('intermission-screen');
+  }
+  function continueStage(choice) { clearInput(); initAudio(); if (game.continueChallenge(choice)) { renderHud(game.snapshot()); show(null); } }
+  function home() { clearInput(); game.home(); best = Number(read('nightfall-best-gauntlet', 0)) || 0; record(); $('frame-state').textContent = '等待拔刀'; show('start-screen'); renderHud(game.snapshot()); }
   function pause() { if (game.state === 'playing') game.pause(); }
   function resume() { if (game.state !== 'paused') return; clearInput(); initAudio(); game.resume(); show(null); }
   function openHelp() {
@@ -229,7 +247,8 @@
     show('help-screen');
   }
   function closeHelp() { show(helpReturn); requestAnimationFrame(() => { if (helpFocus?.isConnected && !helpFocus.closest('[hidden]')) helpFocus.focus({ preventScroll: true }); }); }
-  $('start').addEventListener('click', begin); $('restart').addEventListener('click', begin); $('restart-paused').addEventListener('click', begin);
+  $('start').addEventListener('click', () => begin(true)); $('practice').addEventListener('click', () => begin(false)); $('restart').addEventListener('click', restart); $('restart-paused').addEventListener('click', restart);
+  $('continue-heal').addEventListener('click', () => continueStage('heal')); $('continue-power').addEventListener('click', () => continueStage('power')); $('exit-intermission').addEventListener('click', home);
   $('pause').addEventListener('click', pause); $('resume').addEventListener('click', resume);
   $('return-title').addEventListener('click', home); $('exit-paused').addEventListener('click', home);
   $('home').addEventListener('click', event => { event.preventDefault(); home(); });

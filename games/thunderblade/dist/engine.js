@@ -20,11 +20,22 @@
     warden: { 1: [['cleave'], ['leap'], ['sweep'], ['thrust']], 2: [['cleave'], ['geyser', 'sweep'], ['ring'], ['sweep', 'cleave']], 3: [['geyser', 'thrust'], ['ring'], ['cleave', 'cross'], ['sweep', 'sweep', 'cleave']] },
     trickster: { 1: [['feint'], ['thrust'], ['leap'], ['sweep']], 2: [['feint', 'thrust'], ['cross', 'cross'], ['leap', 'sweep'], ['thrust', 'feint']], 3: [['feint', 'cross', 'thrust'], ['cross', 'feint'], ['leap', 'cross'], ['geyser', 'sweep']] }
   };
+  const BOSSES = [
+    { id: 'duelist', name: '逐影 · 雨庭剑客', scene: 'rain', sceneName: '听雨庭', hp: 3000, style: 0, hint: '看金光弹反，连段末刀后追击', opener: 'sweep' },
+    { id: 'archer', name: '鸣弦 · 竹海游猎', scene: 'bamboo', sceneName: '青篁渡', hp: 3400, style: 2, hint: '横移避箭；弹反箭雨可反射重创，收弓时近身', opener: 'volley' },
+    { id: 'colossus', name: '负岳 · 熔炉巨像', scene: 'forge', sceneName: '烬火炉', hp: 4300, style: 1, hint: '两次满蓄重斩破甲，抓住八秒弱点；红招闪避', opener: 'cleave' }
+  ];
+  const CHALLENGE_ROUTES = {
+    duelist: { 1: [['sweep'], ['thrust'], ['rush']], 2: [['rush', 'cross'], ['feint', 'thrust'], ['cross', 'sweep']], 3: [['cross', 'cross', 'thrust'], ['rush', 'feint'], ['thrust', 'sweep', 'cleave']] },
+    archer: { 1: [['volley'], ['geyser'], ['sidestep']], 2: [['volley', 'volley'], ['geyser', 'volley'], ['sidestep']], 3: [['volley', 'geyser'], ['sidestep', 'volley'], ['geyser', 'sidestep'], ['volley', 'volley']] },
+    colossus: { 1: [['cleave'], ['ring'], ['geyser']], 2: [['cleave'], ['geyser', 'sweep'], ['ring']], 3: [['cleave', 'sweep'], ['ring'], ['geyser', 'cleave']] }
+  };
   class Nightfall {
     constructor(canvas, options = {}) {
       this.canvas = canvas; this.ctx = canvas.getContext('2d'); this.options = options;
       this.randomState = options.seed === undefined ? ((Date.now() ^ Math.floor(Math.random() * 4294967296)) >>> 0) : Number(options.seed) >>> 0;
       this.styleBag = []; this.previousStyle = -1; this.roundsStarted = 0;
+      this.challenge = false; this.stageIndex = 0; this.stageResults = []; this.powerBonus = 0;
       this.dpr = Math.min(options.dpr || (typeof devicePixelRatio !== 'undefined' ? devicePixelRatio : 1), 2);
       canvas.width = W * this.dpr; canvas.height = H * this.dpr;
       this.clock = 0; this.state = 'menu'; this.effects = []; this.texts = []; this.trails = []; this.rings = [];
@@ -43,6 +54,7 @@
       this.shake = 0; this.flash = 0; this.flashColor = '#d8ebde'; this.executionTime = 0; this.hitStop = 0;
       this.banner = ''; this.bannerTime = 0; this.lastMove = { x: 0, y: -1 }; this.resetInput();
       this.style = STYLES[0]; this.styleName = ''; this.styleHint = '';
+      this.bossId = 'duelist'; this.bossName = '断潮刀客'; this.sceneId = 'rain'; this.sceneName = '听雨庭'; this.bossHint = ''; this.armor = 0; this.armorOpen = 0;
       this.route = []; this.routeIndex = 0; this.chainId = 0; this.lastRoute = ''; this.lastOpeners = [];
       this.attackHistory = []; this.attackLog = []; this.lastRedAt = -Infinity; this.punish = 0;
       this.actor = { action: 'idle', age: 0, duration: 1, angle: -Math.PI / 2, force: 0 };
@@ -66,10 +78,30 @@
       if (this.effects.length > 100) this.effects.splice(0, this.effects.length - 100);
     }
     start() {
+      this.challenge = false; this.stageIndex = 0; this.stageResults = []; this.powerBonus = 0;
       this.resetBattle(); this.chooseStyle(); this.roundsStarted++; this.state = 'playing';
       this.say(this.styleName + ' · 六十秒决胜', 2.1); this.emit('start'); this.emit('hud', this.snapshot());
     }
-    home() { this.resetBattle(); this.state = 'menu'; this.emit('hud', this.snapshot()); }
+    startChallenge() {
+      this.challenge = true; this.stageIndex = 0; this.stageResults = []; this.powerBonus = 0;
+      this.startStage(100);
+    }
+    startStage(hp) {
+      const config = BOSSES[this.stageIndex];
+      this.resetBattle(); this.roundsStarted++; this.state = 'playing'; this.player.hp = clamp(hp, 1, 100);
+      this.bossId = config.id; this.bossName = config.name; this.sceneId = config.scene; this.sceneName = config.sceneName; this.bossHint = config.hint;
+      this.boss.hp = this.boss.maxHp = config.hp; this.style = STYLES[config.style]; this.styleName = config.name; this.styleHint = config.hint;
+      if (config.id === 'archer') { this.boss.y = 220; this.nextAttack = 1.1; }
+      this.armor = config.id === 'colossus' ? 2 : 0;
+      this.say((this.stageIndex + 1) + ' / 3 · ' + config.sceneName, 2); this.emit('start'); this.emit('hud', this.snapshot());
+    }
+    continueChallenge(choice) {
+      if (this.state !== 'intermission' || !['heal', 'power'].includes(choice)) return false;
+      const hp = Math.min(100, this.player.hp + (choice === 'heal' ? 32 : 0));
+      if (choice === 'power') this.powerBonus = Math.min(.24, this.powerBonus + .12);
+      this.stageIndex++; this.startStage(hp); return true;
+    }
+    home() { this.challenge = false; this.stageResults = []; this.powerBonus = 0; this.stageIndex = 0; this.resetBattle(); this.state = 'menu'; this.emit('hud', this.snapshot()); }
     cancelAttack() { this.attackHeld = false; this.chargeTime = 0; this.queuedSlash = null; }
     resetInput() { this.input = { x: 0, y: 0 }; this.cancelAttack(); this.queuedDefense = null; }
     pause() { if (this.state === 'playing') { this.state = 'paused'; this.resetInput(); this.emit('pause'); } }
@@ -120,7 +152,15 @@
       if (distance(p, b) <= reach) {
         const counter = this.riposte > 0;
         const weak = this.punish > 0;
-        const damage = Math.round((charged ? 36 + 72 * strength : finisher ? 80 : this.combo === 2 ? 44 : 36) * (1 + (counter ? .35 : 0) + (weak ? charged ? .2 + .15 * strength : .2 : 0)));
+        let damage = Math.round((charged ? 36 + 72 * strength : finisher ? 80 : this.combo === 2 ? 44 : 36) * (1 + (counter ? .35 : 0) + (weak ? charged ? .2 + .15 * strength : .2 : 0)) * (1 + this.powerBonus));
+        if (this.bossId === 'colossus') {
+          if (this.armor > 0 && charged && strength >= .8) {
+            this.armor--; this.emit('sound', 'break'); this.impact(13);
+            this.float(this.armor ? '甲片碎裂 · 再蓄一刀' : '破甲 · 八秒弱点', b.x, b.y - 105, '#ffda9c', 22);
+            if (!this.armor) { this.armorOpen = 8; this.emit('feedback', '重甲崩裂 · 八秒追击窗口'); }
+          } else if (this.armor > 0 && !charged) damage = Math.round(damage * .65);
+          if (this.armorOpen > 0) damage = Math.round(damage * 1.4);
+        }
         this.riposte = 0;
         this.stats.hits++; if (weak) this.stats.weakHits++; if (counter) this.stats.counters++;
         this.hitEffect(b.x - Math.cos(angle) * 28, b.y - Math.sin(angle) * 28, angle, charged || finisher || counter, counter ? '#ffe5a0' : charged ? '#f9d79a' : '#baffe8');
@@ -178,7 +218,7 @@
       const b = this.boss, p = this.player;
       p.x = b.x; p.y = Math.min(636, b.y + 106); p.angle = -Math.PI / 2;
       this.broken = 0; this.posture = 0; this.postureLock = 4.3; this.attack = null; this.rings = []; this.route = []; this.punish = 0;
-      const healed = Math.min(14, p.maxHp - p.hp), dealt = Math.min(320, b.hp);
+      const healed = Math.min(this.challenge ? 10 : 14, p.maxHp - p.hp), dealt = Math.min(320, b.hp);
       this.executionTime = .62; p.inv = 1; p.hp += healed;
       this.stats.executions++; this.cancelAttack(); this.queuedDefense = null; this.nextAttack = .18;
       this.posePlayer('execute', .7, -Math.PI / 2); this.poseBoss('recoil', .7);
@@ -216,7 +256,7 @@
           this.riposte = 1.2;
           this.posePlayer('parry', .32, Math.atan2(this.boss.y - p.y, this.boss.x - p.x)); this.poseBoss('recoil', .2);
           this.hitEffect(p.x, p.y - 15, p.angle, true, '#ffe5a0'); this.hitStop = .075;
-          this.damageBoss(65, 44); this.impact(12); this.flash = .1; this.flashColor = '#f9df9b';
+          this.damageBoss(this.bossId === 'archer' ? Math.round(180 * (1 + this.powerBonus)) : 65, 44); this.impact(12); this.flash = .1; this.flashColor = '#f9df9b';
           this.float('弹 反', p.x, p.y - 60, '#ffe0a0', 30); this.emit('sound', 'parry');
           this.emit('feedback', '完美弹反 · 下一刀强化'); return 'parry';
         }
@@ -232,20 +272,29 @@
     }
     finish(win, reason) {
       if (this.state !== 'playing') return;
-      this.state = win ? 'won' : 'lost'; this.resetInput(); this.attack = null; this.rings = []; this.route = [];
+      this.resetInput(); this.attack = null; this.rings = []; this.route = [];
       const score = Math.round(this.stats.damage + this.stats.parries * 140 + this.stats.dodges * 35 + this.stats.executions * 180 + (win ? 1000 + (60 - this.time) * 35 + this.player.hp * 5 : 0));
-      this.result = { win, reason, time: this.time, remaining: Math.max(0, 60 - this.time), hp: this.player.hp, score, stats: { ...this.stats }, bossHp: this.boss.hp, bossMax: this.boss.maxHp, styleName: this.styleName, styleHint: this.styleHint };
+      const stageResult = { win, bossId: this.bossId, bossName: this.bossName, sceneName: this.sceneName, score, time: this.time, hp: this.player.hp, stats: { ...this.stats } };
+      if (this.challenge) this.stageResults.push(stageResult);
+      if (this.challenge && win && this.stageIndex < BOSSES.length - 1) {
+        this.player.hp = Math.min(100, this.player.hp + 8); this.state = 'intermission'; this.result = null;
+        this.emit('sound', 'win'); this.emit('intermission', this.snapshot()); this.emit('hud', this.snapshot()); return;
+      }
+      this.state = win ? 'won' : 'lost';
+      const totals = this.challenge ? this.stageResults.reduce((sum, s) => { for (const key of Object.keys(sum)) sum[key] = key === 'maxCombo' ? Math.max(sum[key], s.stats[key]) : sum[key] + s.stats[key]; return sum; }, Object.fromEntries(Object.keys(this.stats).map(k => [k, 0]))) : { ...this.stats };
+      this.result = { win, reason: this.challenge && win ? '三境尽破 · 连续挑战完成' : reason, time: this.challenge ? this.stageResults.reduce((sum, s) => sum + s.time, 0) : this.time, remaining: Math.max(0, 60 - this.time), hp: this.player.hp, score: this.challenge ? this.stageResults.reduce((sum, s) => sum + s.score, 0) : score, stats: totals, bossHp: this.boss.hp, bossMax: this.boss.maxHp, styleName: this.styleName, styleHint: this.styleHint, challenge: this.challenge, cleared: this.challenge ? this.stageResults.filter(s => s.win).length : win ? 1 : 0, stageCount: this.challenge ? 3 : 1, stages: this.stageResults.map(s => ({ ...s, stats: { ...s.stats } })) };
       this.emit('result', this.result); this.emit('sound', win ? 'win' : 'lose'); this.emit('hud', this.snapshot());
     }
     snapshot() {
       const a = this.attack;
       const parryNow = !!(a && !a.red && a.duration - a.elapsed <= .27);
       const dodgeNow = !!(a && a.red && a.type !== 'ring' && a.duration - a.elapsed <= .25 || this.rings.some(r => !r.hit && Math.abs(distance(this.player, r) - r.radius) < 85));
-      const hint = this.broken > 0 ? '破防！按斩击 / E 处决 · 回血 +14' : this.executionTime > 0 ? '断潮处决 · 刀势未尽' : parryNow ? '现在格挡！迎住金色刀锋' : dodgeNow ? '现在闪避！避开红色危招' : a ? a.red ? '危 · 红色攻击不可格挡，闪出危险区' : '金色刀芒 · 预警将满时按格挡' : this.riposte > 0 ? '弹反成功 · 趁势出刀，强化反击' : this.punish > 0 ? '收势破绽 · 趁现在连斩或重斩' : this.attackHeld ? '蓄满后松开，重斩更易破防' : '轻斩三连 · 长按蓄力 · 观察首领起手';
+      const hint = this.broken > 0 ? '破防！按斩击 / E 处决 · 回血 +' + (this.challenge ? 10 : 14) : this.executionTime > 0 ? '断潮处决 · 刀势未尽' : parryNow ? '现在格挡！迎住金色刀锋' : dodgeNow ? '现在闪避！避开红色危招' : a ? a.red ? '危 · 红色攻击不可格挡，闪出危险区' : a.type === 'volley' ? '箭道已锁定 · 横移躲开，或金光满时弹反' : '金色刀芒 · 预警将满时按格挡' : this.riposte > 0 ? '弹反成功 · 趁势出刀，强化反击' : this.armorOpen > 0 ? '破甲弱点 · ' + this.armorOpen.toFixed(1) + '秒 · 追击伤害增强' : this.punish > 0 ? '收势破绽 · 趁现在连斩或重斩' : this.attackHeld ? '蓄满后松开，重斩更易破防' : this.bossHint || '轻斩三连 · 长按蓄力 · 观察首领起手';
       return { state: this.state, time: this.time, remaining: Math.max(0, 60 - this.time), hp: this.player.hp, maxHp: this.player.maxHp,
         bossHp: this.boss.hp, bossMax: this.boss.maxHp, posture: this.posture, postureLock: this.postureLock, broken: this.broken, phase: this.phase, phaseName: PHASES[this.phase - 1], charge: clamp(this.chargeTime / .52, 0, 1), attackHeld: this.attackHeld,
         dashCd: this.dashCd, guardCd: this.guardCd, attackCd: this.attackCd, attackQueued: !!this.queuedSlash, riposte: this.riposte, parryNow, dodgeNow, combo: this.comboTime > 0 ? this.combo : 0, stats: { ...this.stats }, hint, attackName: a ? a.name : this.broken > 0 ? '架势崩解' : this.executionTime > 0 ? '处决' : '收势', telegraph: a ? clamp(a.elapsed / a.duration, 0, 1) : 0, danger: !!(a && a.red),
-        styleName: this.styleName, styleHint: this.styleHint, punish: this.punish, attackCombo: a && a.comboTotal > 1 ? a.comboIndex + ' / ' + a.comboTotal : '', pressureName: a ? a.name : this.punish > 0 ? '收势 · 抓破绽' : this.broken > 0 ? '架势崩解' : this.executionTime > 0 ? '断潮处决' : '寻隙' };
+        styleName: this.styleName, styleHint: this.styleHint, punish: this.punish, attackCombo: a && a.comboTotal > 1 ? a.comboIndex + ' / ' + a.comboTotal : '', pressureName: a ? a.name : this.punish > 0 ? '收势 · 抓破绽' : this.broken > 0 ? '架势崩解' : this.executionTime > 0 ? '断潮处决' : '寻隙',
+        challenge: this.challenge, stageIndex: this.stageIndex, stageNumber: this.stageIndex + 1, stageCount: this.challenge ? 3 : 1, bossId: this.bossId, bossName: this.bossName, sceneId: this.sceneId, sceneName: this.sceneName, bossHint: this.bossHint, armor: this.armor, armorOpen: this.armorOpen, powerBonus: this.powerBonus, cleared: this.stageResults.filter(s => s.win).length, totalTime: this.stageResults.reduce((sum, s) => sum + s.time, 0) + (this.state === 'playing' || this.state === 'paused' ? this.time : 0), totalScore: this.stageResults.reduce((sum, s) => sum + s.score, 0), stageResults: this.stageResults.map(s => ({ ...s, stats: { ...s.stats } })), nextBoss: this.challenge && this.stageIndex < 2 ? { name: BOSSES[this.stageIndex + 1].name, sceneName: BOSSES[this.stageIndex + 1].sceneName, hint: BOSSES[this.stageIndex + 1].hint } : null };
     }
     contain(p, radius) {
       const dx = p.x - 360, dy = p.y - 363, d = Math.hypot(dx, dy);
@@ -253,11 +302,25 @@
     }
     beginAttack(type, follow = false) {
       const b = this.boss, p = this.player;
+      if (type === 'sidestep') {
+        const angle = Math.atan2(p.y - b.y, p.x - b.x), side = this.chainId % 2 ? 1 : -1;
+        this.trails.push({ x: b.x, y: b.y, angle, life: .3, max: .3 });
+        b.x += Math.sin(angle) * 130 * side; b.y -= Math.cos(angle) * 130 * side; this.contain(b, 230);
+      }
+      if (type === 'volley' && distance(p, b) < 205) {
+        const d = distance(p, b) || 1, dx = (b.x - p.x) / d, dy = (b.y - p.y) / d;
+        this.trails.push({ x: b.x, y: b.y, angle: Math.atan2(dy, dx), life: .24, max: .24 });
+        const from = { x: b.x, y: b.y }, retreat = { x: b.x + dx * 115, y: b.y + dy * 115 }; this.contain(retreat, 230);
+        if (distance(from, retreat) < 60) {
+          const candidates = [-1, 1].map(side => { const point = { x: from.x - dy * 160 * side, y: from.y + dx * 160 * side }; this.contain(point, 230); return point; });
+          candidates.sort((a, b) => distance(p, b) - distance(p, a)); b.x = candidates[0].x; b.y = candidates[0].y;
+        } else { b.x = retreat.x; b.y = retreat.y; }
+      }
       let angle = Math.atan2(p.y - b.y, p.x - b.x);
       if (type === 'cross') angle += this.routeIndex % 2 ? .42 : -.42;
       const red = ['leap', 'ring', 'cleave', 'geyser'].includes(type);
       const names = { sweep: '横刀 · 金', twin: '连刃 · 金', rush: '逐影突进 · 金', leap: '坠潮 · 危', ring: '潮环 · 危', thrust: '穿喉直刺 · 金', cross: '交错斩 · 金', feint: '迟刃蓄斩 · 金', cleave: '裂地重劈 · 危', geyser: '三叠潮涌 · 危' };
-      const timings = { sweep: this.phase === 1 ? 1.05 : .86, twin: .7, rush: .9, leap: 1.08, ring: .9, thrust: .86, cross: this.routeIndex ? .74 : .94, feint: 1.32, cleave: 1.18, geyser: 1.15 };
+      const timings = { sweep: this.phase === 1 ? 1.05 : .86, twin: .7, rush: .9, leap: 1.08, ring: .9, thrust: .86, cross: this.routeIndex ? .74 : .94, feint: 1.32, cleave: 1.18, geyser: 1.15, volley: this.routeIndex ? 1.05 : 1.2, sidestep: 1.35 };
       const duration = red ? Math.max(timings[type], this.lastRedAt + 1.2 - this.time) : timings[type];
       const length = type === 'thrust' ? 300 : Math.min(390, distance(p, b) + 85);
       const end = { x: b.x + Math.cos(angle) * length, y: b.y + Math.sin(angle) * length };
@@ -268,6 +331,12 @@
       const points = type === 'geyser' ? [-1, 0, 1].map(side => ({ x: target.x + Math.sin(angle) * side * 112, y: target.y - Math.cos(angle) * side * 112 })) : undefined;
       this.attack = { type, name: names[type], elapsed: 0, duration, angle, x: b.x, y: b.y, tx: target.x, ty: target.y, ex: end.x, ey: end.y, radius, halfAngle, halfWidth: type === 'thrust' ? 50 : 63, points, red, follow,
         comboIndex: this.routeIndex + 1, comboTotal: Math.max(1, this.route.length), chain: this.chainId };
+      if (type === 'volley' || type === 'sidestep') {
+        this.attack.name = type === 'volley' ? '三弦贯风 · 金' : '踏竹穿林 · 金'; this.attack.halfWidth = type === 'volley' ? 23 : 34;
+        this.attack.lanes = (type === 'volley' ? [-.29, 0, .29] : [0]).map(offset => ({ x: b.x, y: b.y, ex: b.x + Math.cos(angle + offset) * 740, ey: b.y + Math.sin(angle + offset) * 740 }));
+      }
+      if (this.bossId === 'archer' && type === 'geyser') this.attack.name = '竹影落箭 · 危';
+      if (this.bossId === 'colossus') this.attack.name = ({ cleave: '坠岳锤 · 危', geyser: '地火三裂 · 危', ring: '熔岩震环 · 危', sweep: '横锤 · 金' })[type] || this.attack.name;
       this.punish = 0; b.angle = angle; this.poseBoss('windup', duration, angle);
       this.attackHistory.push({ type, phase: this.phase, style: this.style.id, chain: this.chainId, comboIndex: this.attack.comboIndex, comboTotal: this.attack.comboTotal, time: this.time, duration, red });
       this.emit('threat');
@@ -275,11 +344,12 @@
     }
     pickAttack() {
       if (this.rings.length) { this.nextAttack = .1; return; }
-      let chosen = [this.roundsStarted <= 1 ? 'sweep' : this.style.id === 'hunter' ? 'thrust' : this.style.id === 'trickster' ? 'feint' : 'sweep'];
+      const routeBook = this.challenge ? CHALLENGE_ROUTES[this.bossId] : ROUTES[this.style.id];
+      let chosen = [this.challenge ? BOSSES[this.stageIndex].opener : this.roundsStarted <= 1 ? 'sweep' : this.style.id === 'hunter' ? 'thrust' : this.style.id === 'trickster' ? 'feint' : 'sweep'];
       if (this.attackHistory.length) {
         const d = distance(this.player, this.boss);
-        let candidates = ROUTES[this.style.id][this.phase].filter(route => route.join(',') !== this.lastRoute && !this.lastOpeners.slice(-2).includes(route[0]));
-        if (!candidates.length) candidates = ROUTES[this.style.id][this.phase].filter(route => route.join(',') !== this.lastRoute);
+        let candidates = routeBook[this.phase].filter(route => route.join(',') !== this.lastRoute && !this.lastOpeners.slice(-2).includes(route[0]));
+        if (!candidates.length) candidates = routeBook[this.phase].filter(route => route.join(',') !== this.lastRoute);
         const weights = candidates.map(route => d > 240 && ['rush', 'thrust', 'leap'].includes(route[0]) || d < 160 && ['cross', 'sweep', 'cleave', 'feint'].includes(route[0]) ? 2.3 : 1);
         let value = this.random() * weights.reduce((a, v) => a + v, 0), index = 0;
         while (index < weights.length - 1 && value >= weights[index]) value -= weights[index++];
@@ -295,7 +365,11 @@
       this.attack = null; let hit = false;
       this.attackLog.push({ type: a.type, time: this.time, red: a.red, chain: a.chain }); if (a.red) this.lastRedAt = this.time;
       this.poseBoss(a.type, .38, a.angle);
-      if (['sweep', 'twin', 'cross', 'feint', 'cleave'].includes(a.type)) {
+      if (a.type === 'volley' || a.type === 'sidestep') {
+        for (const lane of a.lanes) this.effects.push({ kind: 'line', ...lane, life: .3, max: .3 });
+        if (a.lanes.some(lane => segmentDistance(p, lane, { x: lane.ex, y: lane.ey }) < a.halfWidth)) this.hurt(18, true, b);
+        this.emit('sound', 'wave');
+      } else if (['sweep', 'twin', 'cross', 'feint', 'cleave'].includes(a.type)) {
         hit = distance(p, b) < a.radius && Math.abs(angleDiff(Math.atan2(p.y - b.y, p.x - b.x), a.angle)) < a.halfAngle;
         this.effects.push({ kind: 'slash', x: b.x, y: b.y, angle: a.angle, side: a.comboIndex % 2 ? 1 : -1, radius: a.radius, color: a.red ? '#f49e7c' : '#f4d39d', heavy: true, life: .34, max: .34 });
         if (a.red) this.hitEffect(b.x + Math.cos(a.angle) * 110, b.y + Math.sin(a.angle) * 110, a.angle, true, '#eeb69a');
@@ -321,7 +395,7 @@
       this.routeIndex++;
       if (this.routeIndex < this.route.length) this.beginAttack(this.route[this.routeIndex], true);
       else {
-        this.route = []; this.punish = a.type === 'ring' ? 1.7 : a.red ? 1.3 : this.phase === 3 ? 1.05 : 1.15;
+        this.route = []; this.punish = this.bossId === 'archer' ? a.type === 'sidestep' ? 2.1 : 1.9 : this.bossId === 'colossus' ? 1.8 : a.type === 'ring' ? 1.7 : a.red ? 1.3 : this.phase === 3 ? 1.05 : 1.15;
         this.nextAttack = this.punish;
       }
     }
@@ -335,6 +409,10 @@
       this.resolvingSlice = true;
       try {
       const p = this.player, b = this.boss;
+      if (this.armorOpen > 0) {
+        this.armorOpen = Math.max(0, this.armorOpen - dt);
+        if (this.armorOpen === 0) { this.armor = 2; this.emit('feedback', '重甲重铸 · 满蓄两刀再次破甲'); }
+      }
       // Hit pause affects motion, not the 60-second clock or defensive cooldowns.
       const motion = this.hitStop > 0 ? dt * .18 : dt; this.hitStop = Math.max(0, this.hitStop - dt);
       for (const pose of [this.actor, this.bossPose]) { pose.age += motion; if (pose.age >= pose.duration) pose.action = 'idle'; }
@@ -383,7 +461,8 @@
             if (this.nextAttack <= 0) this.pickAttack();
             else if (!recovering && this.rings.length === 0) {
               const d = distance(p, b), speed = this.style.id === 'hunter' ? 72 : this.style.id === 'warden' ? 35 : 54;
-              if (d > this.style.distance) { b.x += (p.x - b.x) / d * speed * motion; b.y += (p.y - b.y) / d * speed * motion; this.contain(b, 230); }
+              if (this.bossId === 'archer' && d < 230 && d > 0) { b.x -= (p.x - b.x) / d * 85 * motion; b.y -= (p.y - b.y) / d * 85 * motion; this.contain(b, 230); }
+              else if (d > this.style.distance) { b.x += (p.x - b.x) / d * speed * motion; b.y += (p.y - b.y) / d * speed * motion; this.contain(b, 230); }
             }
           }
           if (this.state !== 'playing') return;
